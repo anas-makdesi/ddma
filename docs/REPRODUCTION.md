@@ -1,10 +1,11 @@
 # Reproducing the papers with ddma
 
-This report re-runs the numerical experiments of the three papers behind `ddma`:
+This report re-runs the numerical experiments of the three papers behind `ddma`, and of Chapter 3 of the thesis:
 
 - **L4DC 2021**: *Data-Driven Abstraction of Monotone Systems*
 - **ADHS 2021**: *Efficient Data-Driven Abstraction of Monotone Systems with Disturbances*
 - **TAC 2024**: *Data-Driven Models of Monotone Systems*
+- **Thesis, Ch. 3**: A. Makdesi, *Data-driven abstractions for the safe learning of nonlinear systems*, Université Paris-Saclay, 2023, Chapter 3 (systems with bounded derivatives)
 
 Each experiment has a script in `reproductions/`. The results are saved as JSON and figures in `reproductions/results/`.
 
@@ -25,6 +26,10 @@ Each experiment has a script in `reproductions/`. The results are saved as JSON 
 | **ADHS**, Fig. 3: µ vs number of data points | µ ≈ 2500 → 1700, 150–650 s per abstraction | With the settings of the original experiment scripts (note 2): their saved output is 4010 → 3280, ddma gives 3888 → 3158; 0.03–0.17 s | ✅ matches the original scripts |
 | **ADHS**, Fig. 5: µ vs partition size (10⁴ points) | decreasing, 3.5·10⁴ → 0.5·10⁴ | decreasing, 4.6·10⁴ → 806 | ✅ trend reproduced (values depend on the settings, note 2) |
 | **ADHS**, Fig. 6: controllable set, assume-guarantee contract | visual | 72.5 % of the safe cells; **0 violations** | ✅ |
+| **Thesis 3.4**, Fig. 3.6: µ vs number of data, five approaches (51 × 51 cells) | µ decreases for all approaches; 3 and 5 (LP final step) end lower than 1, 2, 4; 5 is the tightest | same ordering at every data size (5 < 3 < 4 ≈ 2 < 1); µ at 10⁷ points: 2.51, 2.31, 2.01, 2.31, 1.97 (approaches 1–5) | ✅ trend and ranking reproduced (values: note 6) |
+| **Thesis 3.4**, Figs. 3.7–3.8: time vs number of data | 1, 2, 4 linear in the data; 3, 5 dominated by the LP below 10⁶ points, then growing | same shapes: 1, 2, 4 linear (1.9–5.6 s at 10⁷); 3, 5 flat at 0.1–0.2 s up to 10⁶, 2.1 and 5.9 s at 10⁷ | ✅ |
+| **Thesis 3.4**, Fig. 3.9: µ vs number of cells (10⁴ points) | µ decreases with the number of cells; the approaches come together | µ from 12.6–20.1 (36 cells) to 2.3–3.1 (2,500 cells); the gaps between approaches shrink | ✅ trend reproduced |
+| **Thesis 3.4**, Fig. 3.5: bounds contain F | visual | all five approaches contain F at 200,000 random queries (10⁷ points) | ✅ |
 | **L4DC**, exact abstraction from 300 transitions | abstraction 923 s + invariant 341 s (Fig. 5) | 90,601 states × 301 inputs: abstraction 5.3 s + invariant 0.38 s; invariant = 63.5 % of the safe set; **0 violations** | ✅ reproduced, ~100× faster |
 
 ## Notes
@@ -51,6 +56,14 @@ Command: `python reproductions/tac_lorenz.py --full`.
 
 **5. Half-open cells and assume-guarantee contracts.** With cells [a, b), a state exactly on the upper boundary of the assumed range belongs to the next cell. `ddma` therefore applies environment assumptions at the level of cells: successor sets are restricted to the cells inside the assumption box. Simulated environments must keep the assumed variable in [a, b).
 
+**6. Thesis, Chapter 3: settings and the five approaches.**
+- Script: `reproductions/thesis_ch3.py` (5 random data sets per point, as in the thesis). F(z) = cos z₁ + 0.5 cos z₂ + d, d ∈ [−0.1, 0.1], z ∈ [−π, π]², derivative bounds ∂f/∂z₁ ∈ [−1, 1], ∂f/∂z₂ ∈ [−0.5, 0.5], partition of the TAC experiments with K₁ = K₂ = 50 and c = 0.01 (51 × 51 cells). µ is computed as in the TAC paper, on the cells where the bounds are finite.
+- The approaches are `BoundedDerivativeModel(method=...)`: 1 `"two_matrix"`, 2 `"all_matrix"`, 3 `"lin_mono"`, 4 `"growth"`, 5 `"lin_growth"`.
+- With these settings µ lies between 2 and 4 in Fig. 3.6 (published axis: about 6 to 20) and between 2.3 and 20 in Fig. 3.9 (published axis: up to about 60). The ordering of the approaches and the shape of the curves match. The absolute values depend on settings the chapter does not list (derivative bounds used, how the margin cells are counted).
+- Growth cones: the vertex values (eqs. 3.20–3.21) are computed exactly with one forward and one backward running min/max per axis, the fixed point of Proposition 11. The "Lin + Growth" step (eqs. 3.24–3.25) uses, for each cell vertex v, the cone slopes that hold inside the cell (∂f upper bound along coordinates where v is the lower corner, lower bound where it is the upper corner, and the reverse for the lower bound).
+- LP final steps: all cells are solved as one block-diagonal linear program per batch; the bound kept is the weak-duality bound from the solver's multipliers, so it is sound whatever the solver tolerance.
+- Times: ddma runs every approach in Python/C++; the thesis ran 1, 2, 4 in C++ and 3, 5 in MATLAB, so the two groups are compared separately there.
+
 ## Figures
 
 `reproductions/results/` contains the figures in the papers' style:
@@ -61,6 +74,7 @@ Command: `python reproductions/tac_lorenz.py --full`.
 - `tac_fig12_w1.png`, `tac_fig12_w1_slices.png`: the same with `w_weight=1` (equation (32) as written). The set is **empty** (note 3), and the figures say so; they show the effect of the weight.
 - `adhs_fig3_fig5.png`, `adhs_fig6.png`: ADHS curves and 3-D controllable set.
 - `l4dc_fig5.png`: L4DC invariant set with the data points.
+- `thesis_fig3_5.png`: F and the bounds of approach 5; `thesis_fig3_6_to_3_9.png`: µ and time curves of the five approaches.
 
 They're produced by `ddma.plotting` (`plot_staircase_bounds`, `plot_set_3d`, `plot_set_2d`). MATLAB equivalents are `ddma.plot_bounds` and `ddma.plot_set`, built the same way as the original scripts (the `kron` staircase and `isosurface`). Both were run in real MATLAB (MATLAB Online, November 2026) by `matlab/examples/paper_figures.m`: the staircase bounds of Fig. 8 and the 3-D sets of TAC Figs. 11–12 and ADHS Fig. 6 render as intended. The tests and the cruise-control example also pass there. CI checks the numbers under Octave only, because headless Octave cannot render text.
 
