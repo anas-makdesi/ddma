@@ -23,7 +23,7 @@ from .partition import RectangularPartition
 from .partitioned import PartitionedSimulatingMap, compiled_backend_available
 from .synthesis import Controller, reach_avoid, safety, simulate
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 __all__ = [
     "BoundedDerivativeModel",

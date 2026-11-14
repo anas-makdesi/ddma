@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ddma"
-version = "0.5.0"
+version = "0.6.0"
 description = "Data-driven models and abstractions with guarantees: models of monotone systems and systems with bounded derivatives, symbolic abstractions and correct-by-construction controllers from data."
 readme = "README.md"
 requires-python = ">=3.9"

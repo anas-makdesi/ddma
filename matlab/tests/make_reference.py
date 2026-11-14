@@ -8,6 +8,7 @@ import numpy as np
 from scipy.io import savemat
 
 from ddma import (
+    BoundedDerivativeModel,
     MinimalSimulatingMap,
     PartitionedSimulatingMap,
     RectangularPartition,
@@ -80,5 +81,74 @@ out["abs"] = {
     "reach_domain": ra.domain_grid(), "reach_value": ra.value.reshape(Xp.shape),
     "X": X, "U": U, "Y": Y,
 }
+# bounded-derivative models (thesis Ch. 3), one entry per (case, method, local)
+from ddma._bd_components import GrowthComponent, SignMatrixComponent  # noqa: E402
+
+bd = []
+for k in range(6):
+    n, m = int(rng.integers(1, 4)), int(rng.integers(1, 3))
+    if k % 2:
+        P = RectangularPartition.uniform(-np.ones(n), np.ones(n), rng.integers(2, 6, n))
+    else:
+        P = RectangularPartition([np.unique(np.r_[-1, 1, rng.uniform(-1, 1, rng.integers(1, 5))])
+                                  for _ in range(n)])
+    K = int(rng.integers(30, 200))
+    Z = rng.uniform(-1.2, 1.2, (K, n))
+    g_lo = rng.uniform(-2, 1, (m, n))
+    g_hi = g_lo + rng.uniform(0, 2, (m, n))
+    if k == 2:
+        g_lo[0, 0] = g_hi[0, 0] = 0.0
+    Y = rng.normal(size=(K, m))
+    d_lo, d_hi = -0.05 * np.ones(m), 0.1 * np.ones(m)
+    for method in ("two_matrix", "all_matrix", "lin_mono", "growth", "lin_growth"):
+        locals_ = ("", "cell", "slab") if "growth" in method else ("",)
+        for loc in locals_:
+            lo, hi = [], []
+            for i in range(m):
+                final = "lp" if method.startswith("lin_") else "box"
+                if "growth" in method:
+                    c = GrowthComponent(P, g_lo[i], g_hi[i], d_lo[i], d_hi[i], final=final,
+                                        local=loc or None)
+                else:
+                    c = SignMatrixComponent(P, g_lo[i], g_hi[i], d_lo[i], d_hi[i],
+                                            final=final,
+                                            which="two" if method == "two_matrix" else "all")
+                c.update(Z, Y[:, i])
+                lo.append(c.lower)
+                hi.append(c.upper)
+            bd.append({"Z": Z, "Y": Y, "edges": cell(P.edges), "g_lo": g_lo, "g_hi": g_hi,
+                       "d_lo": d_lo, "d_hi": d_hi, "method": method, "local": loc,
+                       "lower": np.stack(lo, -1), "upper": np.stack(hi, -1)})
+ba = np.empty((1, len(bd)), dtype=object)
+for i, f in enumerate(bd):
+    ba[0, i] = f
+out["bd"] = ba
+
+# bounded-derivative model + abstraction + safety: a damped pendulum
+#   th+ = th + 0.1 om,  om+ = om + 0.1 (-sin th - 0.2 om + u)  (non-monotone in th)
+Xp = RectangularPartition.uniform([-1, -1.5], [1, 1.5], [20, 20])
+Up = RectangularPartition.uniform([-2], [2], 7)
+K = 20000
+X = np.column_stack([rng.uniform(-1, 1, K), rng.uniform(-1.5, 1.5, K)])
+U = rng.uniform(-2, 2, (K, 1))
+Xn = np.column_stack([X[:, 0] + 0.1 * X[:, 1],
+                      X[:, 1] + 0.1 * (-np.sin(X[:, 0]) - 0.2 * X[:, 1] + U[:, 0])])
+Xn = Xn + rng.uniform(-0.005, 0.005, Xn.shape)
+A_lo = np.array([[1.0, 0.1], [-0.1, 0.98]])
+A_hi = np.array([[1.0, 0.1], [-0.05, 0.98]])
+B_lo = np.array([[0.0], [0.1]])
+B_hi = B_lo.copy()
+joint = RectangularPartition.product(Xp, Up)
+pend = {"Xedges": cell(Xp.edges), "Uedges": cell(Up.edges), "X": X, "U": U, "Xn": Xn,
+        "A_lo": A_lo, "A_hi": A_hi, "B_lo": B_lo, "B_hi": B_hi}
+for method in ("all_matrix", "growth"):
+    mdl = BoundedDerivativeModel.from_data(X, U, Xn, joint, A_lo, A_hi, B_lo, B_hi,
+                                           d_lo=-0.005, d_hi=0.005, method=method,
+                                           local="slab" if method == "growth" else None)
+    ab = SymbolicAbstraction(Xp, Up, mdl)
+    ctrl = safety(ab, ab.cells_inside([-0.8, -1.2], [0.8, 1.2]))
+    pend[method + "_domain"] = ctrl.domain_grid()
+out["pend"] = pend
+
 savemat(Path(__file__).with_name("reference.mat"), out, do_compression=True)
 print("wrote reference.mat")

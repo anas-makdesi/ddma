@@ -1,8 +1,9 @@
 # Changelog
 
-## 0.6.0 (unreleased)
+## 0.6.0 (14 November 2026)
 
 - Growth-cone fits in the shared C++ core: the vertex values (scatter + one forward and one backward running min/max per axis) and the `local="cell"` / `"slab"` maps. The slab map is computed per "pattern" (left of / in / right of the point's cell on each axis) with one scatter and exclusive running min/max sweeps, so its cost no longer depends on the slab size. Same model as NumPy (within ~1e-15); 10 million points on a 50 x 50 grid: about 0.3 s, 0.6 s with `local="slab"` (NumPy: about 5 s, and the slab map did not fit in memory). `GrowthMap`, `GrowthComponent` and the growth methods of `BoundedDerivativeModel` take `backend="auto" | "cpp" | "numpy"`.
+- MATLAB / Octave: `ddma.bd_fit` with the five bounded-derivative models (`'two_matrix'`, `'all_matrix'`, `'lin_mono'`, `'growth'`, `'lin_growth'`, and `local` `'cell'` / `'slab'`), in plain MATLAB and through the new MEX `ddma_growth_mex` (same C++ kernels as Python). It returns the same struct as `ddma.fit`, so `ddma.abstraction`, `ddma.safety` and `ddma.reach_avoid` take it unchanged. LP final steps use `linprog` (MATLAB) or `glpk` (Octave), with the bounds certified by weak duality as in Python (`ddma.max_min_affine`). Tested against Python on 54 random cases (all methods, 1-D to 3-D) and on a pendulum safety problem (same invariant sets). New example `matlab/examples/pendulum_bounded_derivatives.m`.
 
 ## 0.5.0 (14 November 2026)
 

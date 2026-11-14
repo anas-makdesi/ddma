@@ -8,7 +8,7 @@
 
 and models of systems that are **not monotone but have bounded derivatives** (TAC 2024, Section III-C, and the five approaches of the PhD thesis, Chapter 3), with the symbolic abstractions and controller synthesis built on top of them (L4DC 2021, ADHS 2021). More model classes are planned (see the roadmap).
 
-**Python and MATLAB.** Both interfaces share one C++ core, they are tested against each other, and the experiments of the three papers and of the thesis chapter are reproduced (see [docs/REPRODUCTION.md](docs/REPRODUCTION.md)). The bounded-derivative methods of v0.4 are in Python so far.
+**Python and MATLAB.** Both interfaces share one C++ core, they are tested against each other, and the experiments of the three papers and of the thesis chapter are reproduced (see [docs/REPRODUCTION.md](docs/REPRODUCTION.md)). The bounded-derivative models are in both (`BoundedDerivativeModel` / `ddma.bd_fit`); online updates and lazy abstractions are Python only.
 
 ![Minimal simulating map of a scalar monotone map](docs/figures/scalar_map.png)
 
@@ -107,10 +107,11 @@ Without a C++ compiler the package falls back to NumPy, which gives identical re
 cd matlab
 build_mex                         % optional: compiles the same C++ kernels as MEX files
 run examples/acc_safety_filter    % the cruise-control example below, in MATLAB
+run examples/pendulum_bounded_derivatives   % a non-monotone system: bounded-derivative models
 addpath tests; run_tests          % checks the MATLAB code against Python reference results
 ```
 
-The `+ddma` package mirrors the Python API: `ddma.fit`, `ddma.msm_bounds`, `ddma.abstraction`, `ddma.safety`, `ddma.reach_avoid`, `ddma.controller_input` (which includes the safety filter), and the partition helpers.
+The `+ddma` package mirrors the Python API: `ddma.fit`, `ddma.bd_fit` (the five bounded-derivative models; same struct as `ddma.fit`, so it goes straight into `ddma.abstraction`), `ddma.msm_bounds`, `ddma.abstraction`, `ddma.safety`, `ddma.reach_avoid`, `ddma.controller_input` (which includes the safety filter), and the partition helpers.
 
 ## Quick start
 
@@ -194,7 +195,7 @@ w.update(z_new[None], [y_new])   # one measurement at a time: about 0.1 ms on th
 | online refinement | `SymbolicAbstraction.refresh()` recomputes only the transitions of the states changed by `update_local`; `safety(..., known_winning=previous_set)` updates the maximal invariant set exactly, keeping the previous set (which stays controlled invariant when the model is refined) | |
 | `estimate_derivative_bounds`, `scenario_confidence` | derivative and disturbance bounds from data, with the scenario-approach guarantee | TAC, Sec. IV, Prop. 9 |
 | `SymbolicAbstraction(..., assumption=)` | assume-guarantee contracts (e.g. "if the leader's speed stays in [a, b] …") | ADHS, TAC |
-| `cpp/ddma_core.hpp`, `cpp/ddma_synthesis.hpp` | header-only C++ kernels used by both the Python and MATLAB interfaces: map fitting (float64, or float32 with outward rounding) and the synthesis fixed points | |
+| `cpp/ddma_core.hpp`, `cpp/ddma_synthesis.hpp`, `cpp/ddma_growth.hpp` | header-only C++ kernels used by both the Python and MATLAB interfaces: map fitting (float64, or float32 with outward rounding), the synthesis fixed points, and the growth-cone fits (vertex values and the cell/slab maps, the latter in time independent of the slab size) | |
 | `ddma.plotting` | paper-style figures: transparent staircase bounds, 3-D and 2-D sets | |
 
 ## Reproducing the papers
@@ -217,12 +218,12 @@ The Python tests are in `tests/` and run in about 10 s with `pytest`. They check
 - **Fast algorithms against brute force**: the grid sweep equals the theorem's formula exactly, on random non-uniform partitions with data on cell edges and outside the box. Safety and reach-avoid fixed points equal the textbook iterations (sets, step counts and allowed inputs) on random abstractions in dimensions 1–4, with every index type, in both backends.
 - **Bounded-derivative models**: all five approaches are sound for random functions with bounded derivatives, with data outside the box and a known part g. The growth-cone vertex values equal the set-membership bounds computed by brute force over all data, and the cell bounds equal their definition; restricted to two sign matrices, the all-matrix model equals the two-matrix one; `update` equals a refit on all data; the windowed update tightens exactly the window. The linear-programming final steps are certified by weak duality, so solver tolerances cannot make them unsound.
 - **Original implementation**: the grid algorithm reproduces the original MATLAB implementation (`Data2Sigma0` + `ApproximationMonotoneSystemData3`) bit for bit on random problems.
-- **Backends and languages**: the C++ and NumPy backends are bit-identical. The MATLAB code, both pure `.m` and MEX, reproduces the Python results exactly (map, abstraction, safety, reach-avoid), and the MEX fixed points equal the `.m` ones on random 1-D to 3-D abstractions. It has been run in MATLAB (MATLAB Online: tests, examples and figures) and CI runs it under Octave.
+- **Backends and languages**: the C++ and NumPy backends are bit-identical. The MATLAB code, both pure `.m` and MEX, reproduces the Python results exactly (map, abstraction, safety, reach-avoid; the five bounded-derivative models to within 1e-15), and the MEX fixed points equal the `.m` ones on random 1-D to 3-D abstractions. It has been run in MATLAB (MATLAB Online: tests, examples and figures) and CI runs it under Octave.
 - **Closed loop**: simulated trajectories under the synthesized controllers and the safety filter never leave the safe set and always reach the target.
 
 ## Roadmap
 
-Next: the v0.4 bounded-derivative models in the C++ core and MATLAB, a Gymnasium safety filter for reinforcement learning, safe learning-based MPC, partition optimisation, and pre-built wheels. See [docs/ROADMAP.md](docs/ROADMAP.md).
+Next: a Gymnasium safety filter for reinforcement learning, safe learning-based MPC, partition optimisation, and pre-built wheels. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Authors
 

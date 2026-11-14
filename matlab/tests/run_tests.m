@@ -63,16 +63,56 @@ if numel(synth) > 1
     for k = 1:numel(shapes)
         ok = true;
         for t = 0:5
-            R = random_abstraction(shapes{k}, 6, mod(t, 2), mod(t, 3));
-            nQ = prod(R.shapeX);
+            RA = random_abstraction(shapes{k}, 6, mod(t, 2), mod(t, 3));
+            nQ = prod(RA.shapeX);
             safe = rand(nQ, 1) < 0.95; tgt = rand(nQ, 1) < 0.15; av = rand(nQ, 1) < 0.1;
-            [d1, a1] = ddma.safety(R, safe, 'matlab'); [d2, a2] = ddma.safety(R, safe, 'mex');
-            [r1, b1, v1] = ddma.reach_avoid(R, tgt, av, 'matlab');
-            [r2, b2, v2] = ddma.reach_avoid(R, tgt, av, 'mex');
+            [d1, a1] = ddma.safety(RA, safe, 'matlab'); [d2, a2] = ddma.safety(RA, safe, 'mex');
+            [r1, b1, v1] = ddma.reach_avoid(RA, tgt, av, 'matlab');
+            [r2, b2, v2] = ddma.reach_avoid(RA, tgt, av, 'mex');
             ok = ok && isequal(d1, d2) && isequal(a1, a2) && isequal(r1, r2) && ...
                  isequal(b1, b2) && isequal(v1, v2);
         end
         nfail = nfail + check(ok, sprintf('random %d-D abstractions (mex = matlab)', numel(shapes{k})));
+    end
+end
+
+% 4. bounded-derivative models (thesis Ch. 3), all methods, MATLAB code and MEX
+bdb = {'matlab'};
+if exist('ddma_growth_mex', 'file') == 3, bdb{end + 1} = 'mex'; end
+if isfield(R, 'bd')
+    bd = R.bd;
+    for b = 1:numel(bdb)
+        okAll = true; worst = 0;
+        for k = 1:numel(bd)
+            c = bd{k};
+            sh = ddma.grid_shape(c.edges); m = size(c.Y, 2);
+            S = ddma.bd_fit(c.Z, c.Y, c.edges, c.g_lo, c.g_hi, c.d_lo, c.d_hi, c.method, ...
+                            c.local, bdb{b});
+            lo = reshape(S.lower, [sh, m]); hi = reshape(S.upper, [sh, m]);
+            tol = 1e-9; if strncmp(c.method, 'lin_', 4), tol = 1e-6; end
+            [ok, d] = close_to(lo(:), c.lower(:), tol);
+            [ok2, d2] = close_to(hi(:), c.upper(:), tol);
+            if ~(ok && ok2)
+                fprintf('        case %d (%s %s): max diff %g\n', k, c.method, c.local, max(d, d2));
+            end
+            okAll = okAll && ok && ok2; worst = max([worst, d, d2]);
+        end
+        nfail = nfail + check(okAll, sprintf('bounded-derivative models, %d cases (%s, max diff %.1e)', ...
+            numel(bd), bdb{b}, worst));
+    end
+    % 5. bounded-derivative model + abstraction + safety (pendulum)
+    p = R.pend;
+    Z = [p.X, p.U];
+    for mth = {'all_matrix', 'growth'}
+        loc = ''; if strcmp(mth{1}, 'growth'), loc = 'slab'; end
+        S = ddma.bd_fit(Z, p.Xn, [p.Xedges(:); p.Uedges(:)]', [p.A_lo, p.B_lo], ...
+                        [p.A_hi, p.B_hi], -0.005, 0.005, mth{1}, loc);
+        A = ddma.abstraction(p.Xedges, p.Uedges, S);
+        safe = ddma.cells_inside(p.Xedges, [-0.8, -1.2], [0.8, 1.2]);
+        dom = ddma.safety(A, safe);
+        ref = logical(p.([mth{1} '_domain']));
+        nfail = nfail + check(isequal(reshape(dom, A.shapeX), ref) && any(ref(:)), ...
+            sprintf('pendulum safety with ddma.bd_fit (%s)', mth{1}));
     end
 end
 
@@ -81,6 +121,14 @@ if nfail == 0
 else
     error('run_tests:fail', '%d test(s) failed', nfail);
 end
+end
+
+function [ok, d] = close_to(a, b, tol)
+% same infinities, finite values within tol
+ok = isequal(a == Inf, b == Inf) && isequal(a == -Inf, b == -Inf);
+f = isfinite(a) & isfinite(b);
+d = 0; if any(f), d = max(abs(a(f) - b(f))); end
+ok = ok && d <= tol;
 end
 
 function f = check(ok, name)
