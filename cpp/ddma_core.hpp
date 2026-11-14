@@ -3,8 +3,10 @@
 //
 // fit_sigma: tightest interval-valued simulating map on a fixed rectangular partition
 // (Makdesi, Girard, Fribourg, "Data-driven models of monotone systems", IEEE TAC 2024,
-// Theorem 2 and Proposition 5). One fused pass over the data (locate + scatter), then one
-// running min / max sweep per axis: O(|K| n log K_i + |Q| n m) time, no temporaries.
+// Theorem 2 and Proposition 5). One pass over the data (locate + scatter), then one
+// running min / max sweep per axis: O(|K| n log K_i + |Q| n m) time. Both phases use
+// threads (OpenMP, optional; see ddma_parallel.hpp); results are bit-identical for any
+// number of threads.
 //
 // Conventions (identical to the Python implementation in ddma/partitioned.py):
 //  * edges[j]: strictly increasing breakpoints of axis j (K_j + 1 values, K_j cells);
@@ -20,6 +22,8 @@
 #include <limits>
 #include <stdexcept>
 #include <vector>
+
+#include "ddma_parallel.hpp"
 
 namespace ddma {
 
@@ -74,12 +78,15 @@ template <class T> inline T round_up(double x) {
   return f;
 }
 
-// Running min (upper) / max (lower) along every axis. `reverse` = suffix accumulation.
-// Blocked loops: for axis ax, the array is (outer, S, inner) with inner = stride; the inner
-// loop is contiguous (step m), so it vectorizes and needs no index arithmetic.
+// Running min (upper) / max (lower) along every axis, for all outputs at once.
+// rev[i * n + ax] = 1: suffix accumulation (from the last cell back) for output i on axis ax.
+// For axis ax the array is (outer, S, inner, m); each grid line (o, r, i) is an independent
+// running min/max over its S cells. Threads share out blocks of lines (o, r-range): every
+// line is processed with the same operations in the same order, whatever the thread
+// count. The innermost loop runs over contiguous memory (r, i), so it vectorizes.
 template <class T, class Op>
 inline void sweep(T* a, const std::vector<std::ptrdiff_t>& shape, std::ptrdiff_t m,
-                  std::ptrdiff_t out_i, const std::vector<char>& reverse, Op op) {
+                  const std::vector<char>& rev, Op op) {
   const std::ptrdiff_t n = std::ptrdiff_t(shape.size());
   std::ptrdiff_t N = 1;
   for (auto s : shape) N *= s;
@@ -89,27 +96,41 @@ inline void sweep(T* a, const std::vector<std::ptrdiff_t>& shape, std::ptrdiff_t
     inner /= S;
     const std::ptrdiff_t outer = N / (S * inner);
     if (S < 2) continue;
-    for (std::ptrdiff_t o = 0; o < outer; ++o) {
-      T* base = a + (o * S * inner) * m + out_i;
-      if (reverse[ax]) {
-        for (std::ptrdiff_t c = S - 2; c >= 0; --c) {
-          T* cur = base + c * inner * m;
-          const T* nxt = cur + inner * m;
-          for (std::ptrdiff_t r = 0; r < inner; ++r) cur[r * m] = op(cur[r * m], nxt[r * m]);
+    std::vector<std::ptrdiff_t> fwd, bwd;  // outputs swept forward / backward on this axis
+    for (std::ptrdiff_t i = 0; i < m; ++i) (rev[i * n + ax] ? bwd : fwd).push_back(i);
+    const std::ptrdiff_t rch = std::max<std::ptrdiff_t>(1, 4096 / m);  // lines per task
+    const std::ptrdiff_t nr = (inner + rch - 1) / rch;
+    const std::ptrdiff_t L = inner * m;  // distance between neighbouring cells on this axis
+    parallel_tasks(outer * nr, N * m, [&](std::ptrdiff_t t) {
+      const std::ptrdiff_t o = t / nr, r0 = (t % nr) * rch, r1 = std::min(inner, r0 + rch);
+      T* base = a + o * S * L;
+      auto pass = [&](const std::vector<std::ptrdiff_t>& outs, bool backward) {
+        if (outs.empty()) return;
+        for (std::ptrdiff_t step = 1; step < S; ++step) {
+          const std::ptrdiff_t c = backward ? S - 1 - step : step;
+          T* cur = base + c * L;
+          const T* src = backward ? cur + L : cur - L;  // the neighbour already done
+          if (std::ptrdiff_t(outs.size()) == m) {   // all outputs: one contiguous range
+            for (std::ptrdiff_t x = r0 * m; x < r1 * m; ++x) cur[x] = op(cur[x], src[x]);
+          } else {
+            for (std::ptrdiff_t r = r0; r < r1; ++r)
+              for (auto i : outs) cur[r * m + i] = op(cur[r * m + i], src[r * m + i]);
+          }
         }
-      } else {
-        for (std::ptrdiff_t c = 1; c < S; ++c) {
-          T* cur = base + c * inner * m;
-          const T* prv = cur - inner * m;
-          for (std::ptrdiff_t r = 0; r < inner; ++r) cur[r * m] = op(cur[r * m], prv[r * m]);
-        }
-      }
-    }
+      };
+      pass(fwd, false);
+      pass(bwd, true);
+    });
   }
 }
 
 // Z: K x n (row-major), Y: K x m (row-major). lower/upper: preallocated N*m, of type
 // double (exact) or float (half the memory; bounds rounded outward, still sound).
+//
+// Each data point gives, for each output i, one upper-bound value (written at the cell
+// "above" the point in the order of output i) and one lower-bound value (at the cell
+// "below"); the sweeps then spread them over the grid. The writing is done by
+// minmax_scatter (ddma_parallel.hpp), which uses threads and works block by block.
 template <class T>
 inline void fit_sigma(const double* Z, const double* Y, std::ptrdiff_t K, std::ptrdiff_t n,
                       std::ptrdiff_t m, const std::vector<const double*>& edges,
@@ -125,56 +146,66 @@ inline void fit_sigma(const double* Z, const double* Y, std::ptrdiff_t K, std::p
   std::ptrdiff_t N = 1;
   for (auto s : shape) N *= s;
   const T INF = std::numeric_limits<T>::infinity();
-  std::fill(lower, lower + N * m, -INF);
-  std::fill(upper, upper + N * m, INF);
+  parallel_fill(lower, N * m, -INF);
+  parallel_fill(upper, N * m, INF);
 
-  std::vector<std::ptrdiff_t> ub(n), lb(n);
-  std::vector<char> ub_ok(n), lb_ok(n);
-  for (std::ptrdiff_t k = 0; k < K; ++k) {
-    const double* z = Z + k * n;
-    for (std::ptrdiff_t j = 0; j < n; ++j) {
-      const std::ptrdiff_t last = shape[j] - 1;
-      std::ptrdiff_t u = search(ax[j], z[j], true) - 2;   // last cell with upper edge <= z
-      std::ptrdiff_t l = search(ax[j], z[j], false);      // first cell with lower edge >= z
-      ub_ok[j] = u >= 0;
-      lb_ok[j] = l <= last;
-      ub[j] = std::min(u, last);
-      lb[j] = std::max<std::ptrdiff_t>(l, 0);
-    }
-    for (std::ptrdiff_t i = 0; i < m; ++i) {
-      const std::int8_t* s = signs + i * n;
-      const double y = Y[k * m + i];
-      // upper bound: corner "above" in the order of output i
-      bool ok = true;
-      std::ptrdiff_t q = 0;
-      for (std::ptrdiff_t j = 0; j < n && ok; ++j) {
-        if (s[j] > 0) { ok = ub_ok[j]; q += ub[j] * stride[j]; }
-        else if (s[j] < 0) { ok = lb_ok[j]; q += lb[j] * stride[j]; }
-        else q += (shape[j] - 1) * stride[j];
+  // One generator per thread, with its own scratch arrays.
+  auto make_gen = [&]() {
+    // scratch: ub, lb (cell indices), ub_ok, lb_ok (flags), one value per axis
+    // everything the generator reads, captured by value (kept in registers)
+    return [Z, Y, n, m, theta, signs, axes = ax.data(), shp = shape.data(),
+            str = stride.data(), buf = std::vector<std::ptrdiff_t>(2 * n),
+            ok_buf = std::vector<char>(2 * n)](std::ptrdiff_t k, auto& emit_up,
+                                               auto& emit_lo) mutable {
+      std::ptrdiff_t* ub = buf.data();
+      std::ptrdiff_t* lb = ub + n;
+      char* ub_ok = ok_buf.data();
+      char* lb_ok = ub_ok + n;
+      const double* z = Z + k * n;
+      for (std::ptrdiff_t j = 0; j < n; ++j) {
+        const std::ptrdiff_t last = shp[j] - 1;
+        std::ptrdiff_t u = search(axes[j], z[j], true) - 2;   // last cell with upper edge <= z
+        std::ptrdiff_t l = search(axes[j], z[j], false);      // first cell with lower edge >= z
+        ub_ok[j] = u >= 0;
+        lb_ok[j] = l <= last;
+        ub[j] = std::min(u, last);
+        lb[j] = std::max<std::ptrdiff_t>(l, 0);
       }
-      if (ok) { T& x = upper[q * m + i]; x = std::min(x, round_up<T>(y + theta[i])); }
-      // lower bound: corner "below"
-      ok = true;
-      q = 0;
-      for (std::ptrdiff_t j = 0; j < n && ok; ++j) {
-        if (s[j] > 0) { ok = lb_ok[j]; q += lb[j] * stride[j]; }
-        else if (s[j] < 0) { ok = ub_ok[j]; q += ub[j] * stride[j]; }
-        else q += (shape[j] - 1) * stride[j];
+      for (std::ptrdiff_t i = 0; i < m; ++i) {
+        const std::int8_t* s = signs + i * n;
+        const double y = Y[k * m + i];
+        // upper bound: corner "above" in the order of output i
+        bool ok = true;
+        std::ptrdiff_t q = 0;
+        for (std::ptrdiff_t j = 0; j < n && ok; ++j) {
+          if (s[j] > 0) { ok = ub_ok[j]; q += ub[j] * str[j]; }
+          else if (s[j] < 0) { ok = lb_ok[j]; q += lb[j] * str[j]; }
+          else q += (shp[j] - 1) * str[j];
+        }
+        if (ok) emit_up(q * m + i, round_up<T>(y + theta[i]));
+        // lower bound: corner "below"
+        ok = true;
+        q = 0;
+        for (std::ptrdiff_t j = 0; j < n && ok; ++j) {
+          if (s[j] > 0) { ok = lb_ok[j]; q += lb[j] * str[j]; }
+          else if (s[j] < 0) { ok = ub_ok[j]; q += ub[j] * str[j]; }
+          else q += (shp[j] - 1) * str[j];
+        }
+        if (ok) emit_lo(q * m + i, round_down<T>(y - theta[i]));
       }
-      if (ok) { T& x = lower[q * m + i]; x = std::max(x, round_down<T>(y - theta[i])); }
-    }
-  }
+    };
+  };
+  minmax_scatter<T, true>(K, N * m, upper, lower, m, make_gen);
+
   auto mn = [](T a, T b) { return a < b ? a : b; };
   auto mx = [](T a, T b) { return a > b ? a : b; };
-  for (std::ptrdiff_t i = 0; i < m; ++i) {
-    std::vector<char> rev_u(n), rev_l(n);
-    for (std::ptrdiff_t j = 0; j < n; ++j) {
-      rev_u[j] = signs[i * n + j] >= 0;
-      rev_l[j] = signs[i * n + j] <= 0;
-    }
-    sweep(upper, shape, m, i, rev_u, mn);
-    sweep(lower, shape, m, i, rev_l, mx);
+  std::vector<char> rev_u(m * n), rev_l(m * n);
+  for (std::ptrdiff_t x = 0; x < m * n; ++x) {
+    rev_u[x] = signs[x] >= 0;
+    rev_l[x] = signs[x] <= 0;
   }
+  sweep(upper, shape, m, rev_u, mn);
+  sweep(lower, shape, m, rev_l, mx);
 }
 
 }  // namespace ddma

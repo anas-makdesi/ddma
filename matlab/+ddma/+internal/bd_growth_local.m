@@ -5,7 +5,8 @@ function [lo, up] = bd_growth_local(Z, y, edges, gl, gh, theta, slab, useMex)
 %   the axes where the pattern says left/right (the cone term there is linear in one edge
 %   of the destination cell). Same algorithm as cpp/ddma_growth.hpp (useMex: that kernel).
 if useMex
-    [lo, up] = ddma_growth_mex(1 + slab, Z, y, edges, gl, gh, theta);
+    [lo, up] = ddma_growth_mex(1 + slab, Z, y, edges, gl, gh, theta, ...
+        ddma.internal.mex_opts());
     return
 end
 n = numel(edges);

@@ -192,6 +192,15 @@ PYBIND11_MODULE(_core, mod) {
   mod.def("growth_vertices", &growth_vertices, "Growth-cone bounds at the grid vertices (lo, up)",
           py::arg("Z"), py::arg("y"), py::arg("edges"), py::arg("g_lo"), py::arg("g_hi"),
           py::arg("theta"));
+  mod.def("set_num_threads", &ddma::set_num_threads,
+          "Threads used by the kernels (0 = OpenMP default: OMP_NUM_THREADS or all cores)",
+          py::arg("n"));
+  mod.def("get_num_threads", &ddma::num_threads, "Threads the kernels will use");
+  mod.def("openmp_available", &ddma::openmp_available, "Whether the kernel was built with OpenMP");
+  mod.def("_set_scatter_mode", [](int m) { ddma::scatter_mode() = m; },
+          "Internal (benchmarks/tests): 0 auto, 1 direct, 2 bucketed, 3 private");
+  mod.def("_set_chunk_entries", [](std::ptrdiff_t c) { ddma::chunk_entries() = c; },
+          "Internal (benchmarks/tests): values written per round in the bucketed mode");
   mod.def("growth_local", &growth_local, "Per-cell cone bounds, 'cell' or 'slab' (lo, up)",
           py::arg("Z"), py::arg("y"), py::arg("edges"), py::arg("g_lo"), py::arg("g_hi"),
           py::arg("theta"), py::arg("slab"));

@@ -19,7 +19,7 @@ theta = d_hi - d_lo;
 shape = ddma.grid_shape(edges);
 useMex = strcmp(backend, 'mex') || (strcmp(backend, 'auto') && exist('ddma_fit_mex', 'file') == 3);
 if useMex
-    [lower, upper] = ddma_fit_mex(Z, Y, edges, theta, int8(signs));
+    [lower, upper] = ddma_fit_mex(Z, Y, edges, theta, int8(signs), ddma.internal.mex_opts());
 else
     [lower, upper] = fit_matlab(Z, Y, edges, theta, signs, shape);
 end

@@ -3,7 +3,7 @@ function [vlo, vup] = bd_growth_vertices(Z, y, edges, gl, gh, theta, useMex)
 %   the 2^n vertices of each point's cell, then forward/backward running min/max per axis.
 %   Column vectors over the vertices, column-major. useMex: the C++ kernel (same values).
 if useMex
-    [vlo, vup] = ddma_growth_mex(0, Z, y, edges, gl, gh, theta);
+    [vlo, vup] = ddma_growth_mex(0, Z, y, edges, gl, gh, theta, ddma.internal.mex_opts());
     return
 end
 [K, n] = size(Z);

@@ -5,15 +5,18 @@
 //   mode 2: same with the points in the cell's slabs ("slab") (prod(numel(edges{j})-1)).
 //   Z: K x n, y: K x 1 (double); edges: 1 x n cell; g_lo, g_hi: 1 x n; theta: scalar.
 //   Outputs are column vectors in MATLAB column-major order.
+//   Optional 8th argument: opts = [threads, scatter_mode, chunk] (ddma_mex_opts.hpp).
 // Build: see build_mex.m. The core works in C order; reversing the axis order makes its
 // output column-major.
 #include "mex.h"
 #include "ddma_growth.hpp"
+#include "ddma_mex_opts.hpp"
 #include <vector>
 
 void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
-  if (nrhs != 7)
-    mexErrMsgIdAndTxt("ddma:mex", "usage: [lo, up] = ddma_growth_mex(mode, Z, y, edges, g_lo, g_hi, theta)");
+  if (nrhs != 7 && nrhs != 8)
+    mexErrMsgIdAndTxt("ddma:mex", "usage: [lo, up] = ddma_growth_mex(mode, Z, y, edges, g_lo, g_hi, theta, opts)");
+  ddma_apply_opts(nrhs == 8 ? prhs[7] : nullptr);
   for (int a : {0, 1, 2, 4, 5, 6})
     if (!mxIsDouble(prhs[a])) mexErrMsgIdAndTxt("ddma:mex", "numeric arguments must be double");
   if (!mxIsCell(prhs[3])) mexErrMsgIdAndTxt("ddma:mex", "edges must be a cell array");

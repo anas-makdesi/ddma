@@ -3,15 +3,21 @@
 //   Z: K x n, Y: K x m (double); edges: 1 x n cell of increasing vectors;
 //   theta: 1 x m (d_hi - d_lo); signs: m x n int8 in {-1, 0, 1}.
 //   lower, upper: N x m, cells in MATLAB column-major order.
+//   Optional 6th argument: opts = [threads, scatter_mode, chunk] (ddma_mex_opts.hpp).
+//   [threads, openmp] = ddma_fit_mex('info', opts): threads the kernels would use.
 // Build:  mex -O ddma_fit_mex.cpp -I../cpp        (MATLAB)
 //         mkoctfile --mex -O ddma_fit_mex.cpp -I../cpp   (Octave)
 // The core works in C order; reversing the axis order makes its output column-major.
 #include "mex.h"
 #include "ddma_core.hpp"
+#include "ddma_mex_opts.hpp"
 #include <vector>
 
 void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
-  if (nrhs != 5) mexErrMsgIdAndTxt("ddma:mex", "usage: [lo, hi] = ddma_fit_mex(Z, Y, edges, theta, signs)");
+  if (ddma_info_call(nlhs, plhs, nrhs, prhs)) return;
+  if (nrhs != 5 && nrhs != 6)
+    mexErrMsgIdAndTxt("ddma:mex", "usage: [lo, hi] = ddma_fit_mex(Z, Y, edges, theta, signs, opts)");
+  ddma_apply_opts(nrhs == 6 ? prhs[5] : nullptr);
   if (!mxIsDouble(prhs[0]) || !mxIsDouble(prhs[1]) || !mxIsCell(prhs[2]) || !mxIsDouble(prhs[3]) ||
       !mxIsInt8(prhs[4]))
     mexErrMsgIdAndTxt("ddma:mex", "types: double, double, cell, double, int8");
