@@ -38,7 +38,7 @@ import itertools
 import numpy as np
 
 from ._box_lp import max_min_affine
-from .partitioned import PartitionedSimulatingMap
+from .partitioned import PartitionedSimulatingMap, _core
 
 __all__ = ["SignMatrixComponent", "GrowthComponent", "sign_patterns"]
 
@@ -146,10 +146,17 @@ class GrowthComponent:
     bounds are at least as tight as min over all data of the max of the cone over the
     cell's vertices (eqs. 3.10-3.11): a point outside the slabs is dominated by the
     vertex values, because a vertex of the cell lies between it and the cell on every
-    axis. Cost per point: O(n) for "cell", O(sum_j |Q| / K_j) for "slab".
+    axis. Cost per point: O(n) for "cell", O(sum_j |Q| / K_j) for "slab" (NumPy); the
+    compiled kernel computes both in O(n 3^n) per point plus O(|Q| n 3^n), independent
+    of the slab size.
+
+    ``backend``: "auto" (compiled kernel for batch fits if installed, else NumPy), "cpp"
+    or "numpy". Same model either way (equal up to floating-point rounding, ~1e-15
+    relative).
     """
 
-    def __init__(self, partition, g_lo, g_hi, d_lo, d_hi, final="box", local=None):
+    def __init__(self, partition, g_lo, g_hi, d_lo, d_hi, final="box", local=None,
+                 backend="auto"):
         self.partition = partition
         self.g_lo, self.g_hi = _check_bounds(g_lo, g_hi)
         self.d_lo, self.d_hi = float(d_lo), float(d_hi)
@@ -163,6 +170,11 @@ class GrowthComponent:
         if local not in (None, "cell", "slab"):
             raise ValueError("local must be None, 'cell' or 'slab'")
         self.local = local
+        if backend not in ("auto", "cpp", "numpy"):
+            raise ValueError("backend must be 'auto', 'cpp' or 'numpy'")
+        if backend == "cpp" and _core is None:
+            raise RuntimeError("compiled kernel ddma._core is not installed")
+        self.backend = backend
         if local is not None:
             self.loc_upper = np.full(partition.shape, np.inf)
             self.loc_lower = np.full(partition.shape, -np.inf)
@@ -191,9 +203,19 @@ class GrowthComponent:
         pl = np.minimum(gh * t, gl * t)
         return np.maximum(ph[:, :-1], ph[:, 1:]), np.minimum(pl[:, :-1], pl[:, 1:])
 
+    @property
+    def _use_cpp(self) -> bool:
+        return self.backend != "numpy" and _core is not None
+
     def _local_update(self, Z, y, block=None):
         """Min/max-scatter the per-cell cone bounds of the points into loc_upper/lower."""
         P = self.partition
+        if block is None and self._use_cpp:
+            lo, up = _core.growth_local(Z, y, P.edges, self.g_lo, self.g_hi, self.theta,
+                                        self.local == "slab")
+            np.minimum(self.loc_upper, up, out=self.loc_upper)
+            np.maximum(self.loc_lower, lo, out=self.loc_lower)
+            return
         n = P.ndim
         K = np.array(P.shape)
         first, last = (np.zeros(n, np.intp), K - 1) if block is None else block
@@ -251,6 +273,8 @@ class GrowthComponent:
         Z = np.atleast_2d(np.asarray(Z, float))
         y = np.asarray(y, float).ravel()
         P = self.partition
+        if self._use_cpp:
+            return _core.growth_vertices(Z, y, P.edges, self.g_lo, self.g_hi, self.theta)
         vshape = self.v_upper.shape
         up = np.full(int(np.prod(vshape)), np.inf)
         lo = np.full(up.size, -np.inf)

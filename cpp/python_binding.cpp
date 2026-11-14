@@ -4,6 +4,7 @@
 #include <pybind11/stl.h>
 
 #include "ddma_core.hpp"
+#include "ddma_growth.hpp"
 #include "ddma_synthesis.hpp"
 
 #include <algorithm>
@@ -131,6 +132,53 @@ static py::tuple reach_avoid(py::array first, py::array last, arru8 en, shape_t 
   return py::make_tuple(R, value, allowed, rounds);
 }
 
+// ---------------------------------------------------------------- growth cones
+struct GridArgs {
+  std::vector<const double*> e;
+  std::vector<std::ptrdiff_t> ne;
+};
+
+static GridArgs grid_args(const arr& Z, const arr& y, const std::vector<arr>& edges,
+                          const arr& gl, const arr& gh) {
+  if (Z.ndim() != 2 || y.ndim() != 1 || Z.shape(0) != y.shape(0))
+    throw std::invalid_argument("Z must be (K, n) and y (K,)");
+  const auto n = Z.shape(1);
+  if (std::ptrdiff_t(edges.size()) != n || gl.size() != n || gh.size() != n)
+    throw std::invalid_argument("one edge array and one derivative bound per input");
+  GridArgs g;
+  for (auto& a : edges) {
+    g.e.push_back(a.data());
+    g.ne.push_back(a.size());
+  }
+  return g;
+}
+
+static py::tuple growth_vertices(arr Z, arr y, std::vector<arr> edges, arr gl, arr gh,
+                                 double theta) {
+  auto g = grid_args(Z, y, edges, gl, gh);
+  py::array_t<double> lo(g.ne), up(g.ne);
+  {
+    py::gil_scoped_release release;
+    ddma::growth_vertices(Z.data(), y.data(), Z.shape(0), Z.shape(1), g.e, g.ne, gl.data(),
+                          gh.data(), theta, lo.mutable_data(), up.mutable_data());
+  }
+  return py::make_tuple(lo, up);
+}
+
+static py::tuple growth_local(arr Z, arr y, std::vector<arr> edges, arr gl, arr gh,
+                              double theta, bool slab) {
+  auto g = grid_args(Z, y, edges, gl, gh);
+  std::vector<std::ptrdiff_t> shape;
+  for (auto s : g.ne) shape.push_back(s - 1);
+  py::array_t<double> lo(shape), up(shape);
+  {
+    py::gil_scoped_release release;
+    ddma::growth_local(Z.data(), y.data(), Z.shape(0), Z.shape(1), g.e, g.ne, gl.data(),
+                       gh.data(), theta, slab, lo.mutable_data(), up.mutable_data());
+  }
+  return py::make_tuple(lo, up);
+}
+
 PYBIND11_MODULE(_core, mod) {
   mod.doc() = "Compiled kernels for ddma";
   mod.def("fit_sigma", &fit_sigma, "Fixed-partition simulating map (lower, upper)",
@@ -141,4 +189,10 @@ PYBIND11_MODULE(_core, mod) {
           py::arg("first"), py::arg("last"), py::arg("enabled"), py::arg("shape"),
           py::arg("safe"), py::arg("fixed") = py::none());
   mod.def("reach_avoid", &reach_avoid, "Reach-avoid (R, value, allowed, rounds)");
+  mod.def("growth_vertices", &growth_vertices, "Growth-cone bounds at the grid vertices (lo, up)",
+          py::arg("Z"), py::arg("y"), py::arg("edges"), py::arg("g_lo"), py::arg("g_hi"),
+          py::arg("theta"));
+  mod.def("growth_local", &growth_local, "Per-cell cone bounds, 'cell' or 'slab' (lo, up)",
+          py::arg("Z"), py::arg("y"), py::arg("edges"), py::arg("g_lo"), py::arg("g_hi"),
+          py::arg("theta"), py::arg("slab"));
 }

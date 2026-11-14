@@ -49,6 +49,8 @@ class GrowthMap(GrowthComponent):
     local : ``"slab"`` (default, tightest), ``"cell"`` or ``None``; see
         :class:`ddma.BoundedDerivativeModel`.
     final : ``"box"`` (default, approach 4) or ``"lp"`` (approach 5).
+    backend : ``"auto"`` (default: compiled kernel for batch fits if installed), ``"cpp"``
+        or ``"numpy"``; same model either way.
 
     Attributes
     ----------
@@ -58,7 +60,7 @@ class GrowthMap(GrowthComponent):
     """
 
     def __init__(self, partition: RectangularPartition, g_lo, g_hi, d_lo: float, d_hi: float,
-                 local: str = "slab", final: str = "box"):
+                 local: str = "slab", final: str = "box", backend: str = "auto"):
         n = partition.ndim
         g_lo = np.broadcast_to(np.asarray(g_lo, float), (n,))
         g_hi = np.broadcast_to(np.asarray(g_hi, float), (n,))
@@ -66,7 +68,8 @@ class GrowthMap(GrowthComponent):
             raise ValueError("disturbance bounds must satisfy d_lo <= d_hi")
         if final not in ("box", "lp"):
             raise ValueError("final must be 'box' or 'lp'")
-        super().__init__(partition, g_lo, g_hi, d_lo, d_hi, final=final, local=local)
+        super().__init__(partition, g_lo, g_hi, d_lo, d_hi, final=final, local=local,
+                         backend=backend)
         self.n_data = 0
 
     @classmethod
@@ -95,7 +98,7 @@ class GrowthMap(GrowthComponent):
 
     def copy(self) -> GrowthMap:
         out = GrowthMap(self.partition, self.g_lo, self.g_hi, self.d_lo, self.d_hi,
-                        local=self.local, final=self.final)
+                        local=self.local, final=self.final, backend=self.backend)
         for a in ("v_upper", "v_lower", "lower", "upper"):
             setattr(out, a, getattr(self, a).copy())
         if self.local is not None:

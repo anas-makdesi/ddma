@@ -191,7 +191,7 @@ class BoundedDerivativeModel:
                 gl, gh = g_lo_all[i, f], g_hi_all[i, f]
                 if method in ("growth", "lin_growth"):
                     comp = GrowthComponent(P, gl, gh, d_lo[i], d_hi[i], final=final,
-                                           local=local)
+                                           local=local, backend=backend)
                 else:
                     comp = SignMatrixComponent(P, gl, gh, d_lo[i], d_hi[i], final=final,
                                                backend=backend, compact=compact)
