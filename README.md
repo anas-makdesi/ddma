@@ -8,7 +8,7 @@
 
 and models of systems that are **not monotone but have bounded derivatives** (TAC 2024, Section III-C, and the five approaches of the PhD thesis, Chapter 3), with the symbolic abstractions and controller synthesis built on top of them (L4DC 2021, ADHS 2021). More model classes are planned (see the roadmap).
 
-**Python and MATLAB.** Both interfaces share one C++ core, they are tested against each other, and the experiments of the three papers and of the thesis chapter are reproduced (see [docs/REPRODUCTION.md](docs/REPRODUCTION.md)). The bounded-derivative models are in both (`BoundedDerivativeModel` / `ddma.bd_fit`); online updates and lazy abstractions are Python only.
+**Python and MATLAB.** Both interfaces share one C++ core, they are tested against each other, and the experiments of the three papers and of the thesis chapter are reproduced (see [docs/REPRODUCTION.md](docs/REPRODUCTION.md)). The bounded-derivative models and their online updates are in both (`BoundedDerivativeModel` / `ddma.bd_fit`); lazy abstractions are Python only.
 
 ![Minimal simulating map of a scalar monotone map](docs/figures/scalar_map.png)
 
@@ -108,10 +108,11 @@ cd matlab
 build_mex                         % optional: compiles the same C++ kernels as MEX files
 run examples/acc_safety_filter    % the cruise-control example below, in MATLAB
 run examples/pendulum_bounded_derivatives   % a non-monotone system: bounded-derivative models
+run examples/online_refinement    % learning while running: the safe region grows, 0 violations
 addpath tests; run_tests          % checks the MATLAB code against Python reference results
 ```
 
-The `+ddma` package mirrors the Python API: `ddma.fit`, `ddma.bd_fit` (the five bounded-derivative models; same struct as `ddma.fit`, so it goes straight into `ddma.abstraction`), `ddma.msm_bounds`, `ddma.abstraction`, `ddma.safety`, `ddma.reach_avoid`, `ddma.controller_input` (which includes the safety filter), and the partition helpers.
+The `+ddma` package mirrors the Python API: `ddma.fit`, `ddma.bd_fit` (the five bounded-derivative models; same struct as `ddma.fit`, so it goes straight into `ddma.abstraction`), `ddma.bd_update` / `ddma.bd_update_local` / `ddma.abstraction_refresh` / `ddma.safety(..., known_winning)` (online refinement), `ddma.msm_bounds`, `ddma.abstraction`, `ddma.safety`, `ddma.reach_avoid`, `ddma.controller_input` (which includes the safety filter), and the partition helpers.
 
 ## Quick start
 
@@ -218,7 +219,7 @@ The Python tests are in `tests/` and run in about 10 s with `pytest`. They check
 - **Fast algorithms against brute force**: the grid sweep equals the theorem's formula exactly, on random non-uniform partitions with data on cell edges and outside the box. Safety and reach-avoid fixed points equal the textbook iterations (sets, step counts and allowed inputs) on random abstractions in dimensions 1–4, with every index type, in both backends.
 - **Bounded-derivative models**: all five approaches are sound for random functions with bounded derivatives, with data outside the box and a known part g. The growth-cone vertex values equal the set-membership bounds computed by brute force over all data, and the cell bounds equal their definition; restricted to two sign matrices, the all-matrix model equals the two-matrix one; `update` equals a refit on all data; the windowed update tightens exactly the window. The linear-programming final steps are certified by weak duality, so solver tolerances cannot make them unsound.
 - **Original implementation**: the grid algorithm reproduces the original MATLAB implementation (`Data2Sigma0` + `ApproximationMonotoneSystemData3`) bit for bit on random problems.
-- **Backends and languages**: the C++ and NumPy backends are bit-identical. The MATLAB code, both pure `.m` and MEX, reproduces the Python results exactly (map, abstraction, safety, reach-avoid; the five bounded-derivative models to within 1e-15), and the MEX fixed points equal the `.m` ones on random 1-D to 3-D abstractions. It has been run in MATLAB (MATLAB Online: tests, examples and figures) and CI runs it under Octave.
+- **Backends and languages**: the C++ and NumPy backends are bit-identical. The MATLAB code, both pure `.m` and MEX, reproduces the Python results exactly (map, abstraction, safety, reach-avoid; the five bounded-derivative models to within 1e-15, and their online updates), and the MEX fixed points equal the `.m` ones on random 1-D to 3-D abstractions. It has been run in MATLAB (MATLAB Online: tests, examples and figures) and CI runs it under Octave.
 - **Closed loop**: simulated trajectories under the synthesized controllers and the safety filter never leave the safe set and always reach the target.
 
 ## Roadmap

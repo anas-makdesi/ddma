@@ -1,5 +1,6 @@
 // MEX gateway to the synthesis fixed points of the shared C++ core (cpp/ddma_synthesis.hpp).
-//   [W, allowed]         = ddma_synth_mex('safety', first, last, enabled, shapeX, safe)
+//   [W, allowed]         = ddma_synth_mex('safety', first, last, enabled, shapeX, safe [, fixed])
+//     fixed (optional, logical nQ x 1): states known to be winning, kept and not tested
 //   [R, allowed, value]  = ddma_synth_mex('reach_avoid', first, last, enabled, shapeX, target, avoid)
 //   good                 = ddma_synth_mex('box_all_in', first, last, enabled, shapeX, W)
 //   first, last: nQ x nP x nx int32 (0-based cell ranges, as built by ddma.abstraction);
@@ -59,7 +60,9 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
       plhs[1] = mxCreateLogicalMatrix(nQ, nP);
       std::uint8_t* W = reinterpret_cast<std::uint8_t*>(mxGetLogicals(plhs[0]));
       std::memcpy(W, safe, nQ);
-      ddma::safety(a, shape, W, reinterpret_cast<std::uint8_t*>(mxGetLogicals(plhs[1])));
+      const std::uint8_t* fixed = nrhs > 6 ? logical_in(prhs[6], nQ, "fixed") : nullptr;
+      ddma::safety(a, shape, W, reinterpret_cast<std::uint8_t*>(mxGetLogicals(plhs[1])), 100000,
+                   fixed);
     } else if (op == "reach_avoid") {
       if (nrhs < 7) mexErrMsgIdAndTxt("ddma:mex", "reach_avoid needs target and avoid");
       const std::uint8_t* target = logical_in(prhs[5], nQ, "target");

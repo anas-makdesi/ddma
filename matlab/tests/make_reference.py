@@ -150,5 +150,48 @@ for method in ("all_matrix", "growth"):
     pend[method + "_domain"] = ctrl.domain_grid()
 out["pend"] = pend
 
+# online refinement: fit, exact update, windowed update, refresh, incremental safety
+K = 20330
+X = np.column_stack([rng.uniform(-1, 1, K), rng.uniform(-1.5, 1.5, K)])
+U = rng.uniform(-2, 2, (K, 1))
+Xn = np.column_stack([X[:, 0] + 0.1 * X[:, 1],
+                      X[:, 1] + 0.1 * (-np.sin(X[:, 0]) - 0.2 * X[:, 1] + U[:, 0])])
+Xn = Xn + rng.uniform(-0.005, 0.005, Xn.shape)
+A_lo = np.array([[1.0, 0.1], [-0.3, 0.9]])
+A_hi = np.array([[1.0, 0.1], [0.1, 1.05]])
+B_lo = np.array([[0.0], [0.05]])
+B_hi = np.array([[0.0], [0.15]])
+online = {"X": X, "U": U, "Xn": Xn, "A_lo": A_lo, "A_hi": A_hi, "B_lo": B_lo, "B_hi": B_hi,
+          "Xedges": cell(Xp.edges), "Uedges": cell(Up.edges), "window": 1}
+
+
+def comp_bounds(mdl):
+    return (np.stack([c.lower for _, c in mdl.components], -1),
+            np.stack([c.upper for _, c in mdl.components], -1))
+
+
+mdl = BoundedDerivativeModel.from_data(X[:300], U[:300], Xn[:300], joint, A_lo, A_hi, B_lo,
+                                       B_hi, d_lo=-0.005, d_hi=0.005, method="growth",
+                                       local="slab")
+ab = SymbolicAbstraction(Xp, Up, mdl)
+safe = ab.cells_inside([-0.8, -1.2], [0.8, 1.2])
+online["safe"] = safe.reshape(Xp.shape)
+online["dom0"] = safety(ab, safe).domain_grid()
+mdl.update(X[300:20300], U[300:20300], Xn[300:20300])
+online["lo1"], online["hi1"] = comp_bounds(mdl)
+ab.refresh(np.ones(ab.n_states, bool))
+dom1 = safety(ab, safe, known_winning=online["dom0"].ravel()).domain
+online["dom1"] = dom1.reshape(Xp.shape)
+mdl.update_local(X[20300:20330], U[20300:20330], Xn[20300:20330], 1)
+online["lo2"], online["hi2"] = comp_bounds(mdl)
+online["refreshed"] = ab.refresh().reshape(Xp.shape)
+online["first2"] = ab.first.reshape(Xp.shape + Up.shape + (2,))
+online["last2"] = ab.last.reshape(Xp.shape + Up.shape + (2,))
+online["enabled2"] = ab.enabled.reshape(Xp.shape + Up.shape)
+online["dom2"] = safety(ab, safe, known_winning=dom1).domain_grid()
+out["online"] = online
+print("online:", online["dom0"].mean(), dom1.mean(), online["dom2"].mean(),
+      online["refreshed"].mean())
+
 savemat(Path(__file__).with_name("reference.mat"), out, do_compression=True)
 print("wrote reference.mat")

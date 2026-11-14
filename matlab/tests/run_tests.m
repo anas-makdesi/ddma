@@ -116,6 +116,90 @@ if isfield(R, 'bd')
     end
 end
 
+% 6. online refinement vs Python: fit, exact update, windowed update, refresh,
+%    incremental safety (known_winning)
+if isfield(R, 'online')
+    o = R.online;
+    Z = [o.X, o.U]; Xn = o.Xn;
+    edges = [o.Xedges(:); o.Uedges(:)]';
+    glo = [o.A_lo, o.B_lo]; ghi = [o.A_hi, o.B_hi];
+    safe = logical(o.safe(:));
+    for b = 1:numel(bdb)
+        S = ddma.bd_fit(Z(1:300, :), Xn(1:300, :), edges, glo, ghi, -0.005, 0.005, ...
+                        'growth', 'slab', bdb{b});
+        A = ddma.abstraction(o.Xedges, o.Uedges, S);
+        d0 = ddma.safety(A, safe);
+        S = ddma.bd_update(S, Z(301:20300, :), Xn(301:20300, :));
+        sh = [ddma.grid_shape(edges), 2];
+        ok = close_to(reshape(S.lower, sh), o.lo1, 1e-9) && close_to(reshape(S.upper, sh), o.hi1, 1e-9);
+        [A, S] = ddma.abstraction_refresh(A, S, true(numel(safe), 1));
+        d1 = ddma.safety(A, safe, [], d0);
+        S = ddma.bd_update_local(S, Z(20301:20330, :), Xn(20301:20330, :), o.window);
+        ok = ok && size(S.changed, 1) == 30;
+        ok = ok && close_to(reshape(S.lower, sh), o.lo2, 1e-9) && close_to(reshape(S.upper, sh), o.hi2, 1e-9);
+        [A, S, mask] = ddma.abstraction_refresh(A, S);
+        ok = ok && isequal(mask, logical(o.refreshed(:))) && isempty(S.changed);
+        shX = A.shapeX; shU = A.shapeU;
+        en = reshape(A.enabled, [shX, shU]);
+        msk = repmat(en, [1 1 1 2]);
+        first = reshape(A.first, [shX, shU, 2]); last = reshape(A.last, [shX, shU, 2]);
+        ok = ok && isequal(en, logical(o.enabled2)) && ...
+             isequal(double(first(msk)), double(o.first2(msk))) && ...
+             isequal(double(last(msk)), double(o.last2(msk)));
+        d2 = ddma.safety(A, safe, [], d1);
+        ok = ok && isequal(d0, logical(o.dom0(:))) && isequal(d1, logical(o.dom1(:))) && ...
+             isequal(d2, logical(o.dom2(:))) && any(d2) && all(d2 >= d1);
+        nfail = nfail + check(ok, sprintf('online: update, update_local, refresh, known_winning (%s)', bdb{b}));
+    end
+end
+
+% 7. update = refit (all methods), windowed update never tighter, full window = update,
+%    known_winning in both synthesis backends
+ddma.seed(3);
+edges = {linspace(-1, 1, 7)', [-1; -0.3; 0.2; 1]};
+Z = 2.4 * rand(260, 2) - 1.2;
+Y = [sin(2 * Z(:, 1)) + 0.4 * Z(:, 2), Z(:, 1) .* Z(:, 2)];
+glo = [-2 0.3; -1.2 -1.2]; ghi = [2 0.5; 1.2 1.2];
+ok = true;
+for mth = {'two_matrix', 'all_matrix', 'lin_mono', 'growth', 'lin_growth'}
+    locs = {''}; if ~isempty(strfind(mth{1}, 'growth')), locs = {'', 'cell', 'slab'}; end
+    for l = 1:numel(locs)
+        Sall = ddma.bd_fit(Z, Y, edges, glo, ghi, -0.02, 0.02, mth{1}, locs{l});
+        S = ddma.bd_fit(Z(1:150, :), Y(1:150, :), edges, glo, ghi, -0.02, 0.02, mth{1}, locs{l});
+        Su = ddma.bd_update(S, Z(151:end, :), Y(151:end, :));
+        tol = 1e-9; if strncmp(mth{1}, 'lin_', 4), tol = 1e-6; end
+        ok = ok && close_to(Su.lower, Sall.lower, tol) && close_to(Su.upper, Sall.upper, tol);
+        if ~isempty(strfind(mth{1}, 'growth'))
+            Sw = ddma.bd_update_local(S, Z(151:end, :), Y(151:end, :), 1);
+            ok = ok && all(Sw.upper(:) >= Sall.upper(:) - tol) && all(Sw.lower(:) <= Sall.lower(:) + tol);
+            Sb = ddma.bd_update_local(S, Z(151:end, :), Y(151:end, :), 100);
+            ok = ok && close_to(Sb.lower, Sall.lower, tol) && close_to(Sb.upper, Sall.upper, tol);
+        end
+    end
+end
+nfail = nfail + check(ok, 'update = refit (5 methods), windowed update never tighter, full window = update');
+if numel(synth) > 1
+    ok = true;
+    ddma.seed(4);
+    for t = 0:5
+        RA = random_abstraction([9 8], 6, mod(t, 2), mod(t, 3));
+        nQ = prod(RA.shapeX);
+        safe = rand(nQ, 1) < 0.95;
+        [d, a] = ddma.safety(RA, safe, 'matlab');
+        inner = ddma.safety(RA, d & rand(nQ, 1) < 0.5, 'matlab');   % an invariant subset
+        [d1, a1] = ddma.safety(RA, safe, 'matlab', inner);
+        [d2, a2] = ddma.safety(RA, safe, 'mex', inner);
+        ok = ok && isequal(d1, d) && isequal(d2, d) && isequal(a1, a) && isequal(a2, a);
+    end
+    bad = false;
+    try
+        ddma.safety(RA, safe, 'mex', safe & ~d);   % not invariant
+    catch
+        bad = true;
+    end
+    nfail = nfail + check(ok && (bad || ~any(safe & ~d)), 'safety with known_winning (matlab = mex = plain; checked)');
+end
+
 if nfail == 0
     fprintf('ALL MATLAB TESTS PASSED (%d backends)\n', numel(backends));
 else
