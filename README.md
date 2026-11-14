@@ -81,13 +81,29 @@ In two dimensions the model is a pair of staircases, one value per cell, around 
 
 | model | learn model | build abstraction | synthesis | safe region |
 |---|---:|---:|---:|---:|
-| `two_matrix` | 0.3 s | 0.1 s | 0.01 s | 16.1 % |
+| `two_matrix` | 0.2 s | 0.1 s | 0.01 s | 16.1 % |
 | `all_matrix` | 1.1 s | 0.1 s | 0.01 s | 17.4 % |
-| `growth` | 1.1 s | 0.1 s | 0.01 s | 17.6 % |
+| `growth` | 0.2 s | 0.1 s | 0.01 s | 17.6 % |
 | `lin_mono` | 23 s | 0.1 s | 0.01 s | 17.6 % |
 | `lin_growth` | 26 s | 0.1 s | 0.01 s | 17.8 % |
 
 (`python examples/pendulum_bounded_derivatives.py`; times on one CPU core, indicative.)
+
+## Reinforcement learning that never violates its constraints
+
+`ddma.rl.SafetyFilterWrapper` puts a learned safety controller around any [Gymnasium](https://gymnasium.farama.org) environment: each action of the agent passes unchanged if it is safe and is replaced by the nearest safe action otherwise. From a state in the controller's domain the system stays safe for ever, whatever the agent does, during training as well. In MATLAB, `ddma.safe_step` / `ddma.safe_reset` wrap the step and reset functions of an environment in the form used by the Reinforcement Learning Toolbox (`rlFunctionEnv`).
+
+```python
+from ddma.rl import SafetyFilterWrapper
+env = SafetyFilterWrapper(gym_env, controller)   # controller = ddma.safety(...)
+model = PPO("MlpPolicy", env).learn(100_000)    # any agent, any library
+```
+
+On the cruise-control task (`ddma.rl.CruiseControlEnv`: drive close to 22 m/s behind a leader that switches between about 13 and 17 m/s; a crash or a lost leader ends the episode), PPO alone crashes or loses the leader 266–319 times while it learns (3 seeds, 100,000 steps each). Inside the filter, built from 200,000 logged transitions without the vehicle model, it has 0 violations in training and evaluation, and ends with a slightly higher return.
+
+![Constraint violations during training, with and without the safety filter](docs/figures/rl_safety_filter.png)
+
+(`python examples/rl_safety_filter.py`, needs `pip install "ddma[rl-demo]"`; MATLAB: `run examples/rl_safety_filter`.)
 
 ## Install
 
@@ -189,6 +205,7 @@ w.update(z_new[None], [y_new])   # one measurement at a time: about 0.1 ms on th
 | `PartitionedSimulatingMap` | tightest interval map on a fixed rectangular partition (O(\|K\| log\|Q\| + \|Q\|) sweep), incremental updates; the data-induced partition recovers the exact minimal map | TAC paper |
 | sign patterns (`signs=`) | known increasing (+1) / decreasing (−1) / no (0) dependence per output and input | ±1: order transformation for unknown linear functions (thesis Ch. 2); 0: extension in this package |
 | `SymbolicAbstraction` | finite abstraction of x⁺ ∈ f(x,u) + g(x,u) + D; successors stored as boxes of cells; `features=` for unknown parts that depend on a subset of (x, u) | L4DC 2021, ADHS 2021, TAC paper |
+| `ddma.rl.SafetyFilterWrapper`, `CruiseControlEnv` | certified safety filter around any Gymnasium environment (actions corrected to the nearest safe one; initial states redrawn into the controller's domain; optional penalty per correction); a cruise-control RL benchmark | |
 | `safety`, `reach_avoid` | maximal controlled invariant set; reach-avoid with step counts. Exact fixed points in the C++ core: summed-area tables check a successor box in O(2^n); in `safety` each state keeps a pointer to its first input not yet ruled out, so every state–input pair is examined at most once over the whole fixed point; `reach_avoid` re-examines a state only when its successor hull gained a winning cell | standard fixed points |
 | `SymbolicAbstraction(..., lazy=True)` | no transitions stored: `safety` evaluates a transition only when its scan reaches it (states outside the safe set are never expanded, each state stops at its first good input). Memory O(\|Q\|) instead of O(\|Q\|·\|P\|); the controller computes its allowed inputs on demand. Same winning set | standard fixed point, transitions computed on demand |
 | `Controller` | concrete inputs (`pick=`), **safety filter** (`filter`), closed-loop `simulate` | |
@@ -225,7 +242,7 @@ The Python tests are in `tests/` and run in about 10 s with `pytest`. They check
 
 ## Roadmap
 
-Next: a Gymnasium safety filter for reinforcement learning, safe learning-based MPC, partition optimisation, and pre-built wheels. See [docs/ROADMAP.md](docs/ROADMAP.md).
+Next: partition optimisation, controlled invariance via monotone embeddings, documentation site and pre-built wheels. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Authors
 

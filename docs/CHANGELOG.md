@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.0 (14 November 2026)
+
+**Safety filter for reinforcement learning**
+- `ddma.rl.SafetyFilterWrapper` (Gymnasium): every action goes through `Controller.filter` (unchanged if safe, nearest safe action otherwise); initial states redrawn into the controller's domain (`reset_in_domain=True`); optional reward `penalty` per unit of correction; `info` reports the safe action, whether it was corrected, and by how much.
+- `ddma.rl.CruiseControlEnv`: the adaptive cruise control problem of the TAC paper as an RL task.
+- `examples/rl_safety_filter.py`: PPO (Stable-Baselines3), 3 seeds × 100,000 steps: 266–319 violations in training without the filter, 0 with it (and 0 in evaluation), slightly higher return. Figure `docs/figures/rl_safety_filter.png`.
+- MATLAB: `ddma.safe_step`, `ddma.safe_reset` (step/reset functions in the form of the Reinforcement Learning Toolbox's `rlFunctionEnv`; no toolbox needed), `examples/cruise_control_env.m`, `examples/rl_safety_filter.m`; filter tested against Python on 300 random states.
+- Extras: `pip install "ddma[rl]"` (gymnasium), `"ddma[rl-demo]"` (+ stable-baselines3, matplotlib).
+
 ## 0.7.0 (14 November 2026)
 
 **Python and MATLAB at parity.** Every feature is now in both interfaces, tested against each other; `docs/PARITY.md` maps each Python name to its MATLAB counterpart.

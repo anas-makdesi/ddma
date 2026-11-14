@@ -3,7 +3,6 @@
 Planned work, roughly in order. Contributions and suggestions are welcome through issues.
 
 ## Applications
-- **Safety filter for reinforcement learning**: a Gymnasium wrapper that puts a certified ddma safety filter around any agent, with a demo where a PPO agent learns while staying safe.
 - **Safe learning-based MPC**: the online refinement of the model and the safety controller is in v0.4 (`update_local`, `refresh`, incremental `safety`); the compatible estimates and the MPC that uses them (compatible-models approach) are developed in a separate package that uses `GrowthMap` (v0.5).
 
 ## Methods

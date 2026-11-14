@@ -39,6 +39,13 @@ The data of `bd_fit` are `Z = [X U]` and `Y = X' - g(X, U)`, as for `ddma.fit` (
 | `simulate(step, ctrl, x0, n, pick=, stop_in=, nominal=)` | `[xs, us] = ddma.simulate(step, A, allowed, x0, n, pick, stop_in, nominal)` | same trajectory |
 | `affine_bounds(A, B, c)` | `ddma.affine_bounds(A, B, c)` | exact |
 
+## Reinforcement learning
+
+| Python | MATLAB | Tested against Python |
+|---|---|---|
+| `ddma.rl.SafetyFilterWrapper(env, controller, state_fn=, penalty=, reset_in_domain=)` (Gymnasium) | `ddma.safe_step(step, A, allowed, state_fcn, penalty)`, `ddma.safe_reset(reset, A, allowed, state_fcn)` (step/reset functions in the form of the RL Toolbox's `rlFunctionEnv`) | same safe actions (300 random states) |
+| `ddma.rl.CruiseControlEnv` | `matlab/examples/cruise_control_env.m` | same dynamics and reward |
+
 ## Partitions and plots
 
 | Python | MATLAB |
@@ -59,6 +66,7 @@ The data of `bd_fit` are `Z = [X U]` and `Y = X' - g(X, U)`, as for `ddma.fit` (
 | `adaptive_cruise_control.py` | `acc_safety_filter.m` |
 | `pendulum_bounded_derivatives.py` | `pendulum_bounded_derivatives.m` (coarser grid) |
 | `lazy_synthesis.py` | `lazy_synthesis.m` |
+| `rl_safety_filter.py` (PPO with Stable-Baselines3) | `rl_safety_filter.m` (exploring agents; with the RL Toolbox, train any agent on `rlFunctionEnv(..., safeStep, safeReset)`) |
 | — | `online_refinement.m` |
 
 The examples use random data, so the two languages draw different samples and print slightly different numbers; on the same data the results are equal (tested).
@@ -67,4 +75,5 @@ The examples use random data, so the two languages draw different samples and pr
 
 - **Paper reproductions** (`reproductions/`) are Python scripts; `matlab/examples/paper_figures.m` redraws the paper figures in MATLAB.
 - **LP final steps** (`'lin_mono'`, `'lin_growth'`) and `estimate_derivative_bounds` need `linprog` (Optimization Toolbox) in MATLAB; Octave has `glpk` built in. The LP bounds are certified by weak duality in both languages, so they are sound whatever the solver.
+- **RL training** in MATLAB needs the Reinforcement Learning Toolbox; ddma's filter functions do not, and the MATLAB example runs without it.
 - **Compiled kernels**: Python builds them on install; MATLAB with `build_mex` (plain MATLAB code is used otherwise, with the same results).

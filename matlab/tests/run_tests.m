@@ -277,6 +277,23 @@ if isfield(R, 'par')
     dp = ddma.data_partition(q.est_Z(1:7, :), [-1 -1], [1 1]);
     ok = ok && all(cellfun(@(a, b) isequal(a(:), b(:)), dp(:), q.dp_edges(:)));
     nfail = nfail + check(ok, 'growth_map, f_bounds, fit_update, compact, contains, msm extras, data_partition');
+    % safety filter: same safe actions as the Python Controller.filter; safe_step/safe_reset
+    ok = true;
+    for k = 1:size(q.filt_x, 1)
+        sk = ddma.controller_input(Ae, ae, q.filt_x(k, :), q.filt_u(k, :));
+        ok = ok && max(abs(sk - q.filt_s(k, :))) < 1e-12;
+    end
+    st0 = @(u, L) deal([], 0, false, setfield(L, 'State', plant(L.State, u)));  %#ok<SFLD>
+    st = ddma.safe_step(st0, Ae, ae, [], 0.5);
+    L = struct('State', q.filt_x(1, :));
+    for k = 1:200
+        [~, r, ~, L] = st(3, L);
+        ok = ok && ~L.OutsideDomain && abs(r + 0.5 * L.Correction) < 1e-15;
+    end
+    ok = ok && dl(ddma.flat_index(Ae.shapeX, ddma.locate(p.Xedges, L.State)));
+    rs = ddma.safe_reset(@() deal([], struct('State', [2 * rand - 1, 3 * rand - 1.5])), Ae, ae);
+    for k = 1:20, [~, L] = rs(); ok = ok && ~isempty(ddma.controller_input(Ae, ae, L.State)); end
+    nfail = nfail + check(ok, 'safety filter = Python Controller.filter; safe_step, safe_reset');
     % approach 1 equals the Python BoundedDerivativeModel (TAC Prop. 8), zero bounds included
     S1 = ddma.bd_fit(Z, p.Xn, edges, glo, ghi, -0.005, 0.005, 'two_matrix');
     sh = [ddma.grid_shape(edges), 2];

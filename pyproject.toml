@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ddma"
-version = "0.7.0"
+version = "0.8.0"
 description = "Data-driven models and abstractions with guarantees: models of monotone systems and systems with bounded derivatives, symbolic abstractions and correct-by-construction controllers from data."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -22,7 +22,9 @@ dependencies = ["numpy>=1.22"]
 [project.optional-dependencies]
 examples = ["matplotlib>=3.5", "scipy>=1.9"]
 lp = ["scipy>=1.9"]
-dev = ["pytest>=7", "ruff>=0.4", "matplotlib>=3.5", "scipy>=1.9"]
+rl = ["gymnasium>=0.29"]
+rl-demo = ["gymnasium>=0.29", "stable-baselines3>=2.0", "matplotlib>=3.5"]
+dev = ["pytest>=7", "ruff>=0.4", "matplotlib>=3.5", "scipy>=1.9", "gymnasium>=0.29"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
