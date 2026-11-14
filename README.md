@@ -6,7 +6,7 @@
 
 > A. Makdesi, A. Girard, L. Fribourg. *Data-Driven Models of Monotone Systems.* IEEE Transactions on Automatic Control, 69, pp. 5294–5309, 2024. [doi:10.1109/TAC.2023.3346793](https://doi.org/10.1109/TAC.2023.3346793)
 
-It also provides models for systems with bounded derivatives (TAC 2024, Section III-C), and the symbolic abstractions and controller synthesis built on top of them (L4DC 2021, ADHS 2021). More model classes are planned (see the roadmap).
+It also provides models for systems with bounded derivatives (TAC 2024, Section III-C; five approaches from the thesis, Chapter 3), and the symbolic abstractions and controller synthesis built on top of them (L4DC 2021, ADHS 2021). More model classes are planned (see the roadmap).
 
 **Python and MATLAB.** Both interfaces share one C++ core, they are tested against each other, and the experiments of all three papers are reproduced (see [docs/REPRODUCTION.md](docs/REPRODUCTION.md)).
 
@@ -118,7 +118,7 @@ u = ctrl.filter(x, u_nominal)   # closest certified-safe input to u_nominal
 | `safety`, `reach_avoid` | maximal controlled invariant set; reach-avoid with step counts. Exact fixed points in the C++ core: summed-area tables check a successor box in O(2^n); in `safety` each state keeps a pointer to its first input not yet ruled out, so every state–input pair is examined at most once over the whole fixed point; `reach_avoid` re-examines a state only when its successor hull gained a winning cell | standard fixed points |
 | `SymbolicAbstraction(..., lazy=True)` | no transitions stored: `safety` evaluates a transition only when its scan reaches it (states outside the safe set are never expanded, each state stops at its first good input). Memory O(\|Q\|) instead of O(\|Q\|·\|P\|); the controller computes its allowed inputs on demand. Same winning set. Python only | standard fixed point, transitions computed on demand |
 | `Controller` | concrete inputs (`pick=`), **safety filter** (`filter`), closed-loop `simulate` | |
-| `BoundedDerivativeModel` | unknown dynamics that are *not* monotone but have bounded partial derivatives (two monotone maps, intersected) | TAC, Prop. 8 |
+| `BoundedDerivativeModel` | unknown dynamics that are *not* monotone but have bounded partial derivatives. `method=`: `"two_matrix"` (two monotone maps, intersected; default), `"all_matrix"` (all sign combinations of the derivative bounds), `"growth"` (growth cones evaluated at the grid vertices, exact set-membership values there in one sweep per axis), and `"lin_mono"`, `"lin_growth"` (the same with a linear-programming final step, tightest). `update` adds data exactly; `update_local` (growth cones) updates only a window of cells around each new point, for online use | TAC, Prop. 8; thesis Ch. 3 |
 | `estimate_derivative_bounds`, `scenario_confidence` | derivative and disturbance bounds from data, with the scenario-approach guarantee | TAC, Sec. IV, Prop. 9 |
 | `SymbolicAbstraction(..., assumption=)` | assume-guarantee contracts (e.g. "if the leader's speed stays in [a, b] …") | ADHS, TAC |
 | `cpp/ddma_core.hpp`, `cpp/ddma_synthesis.hpp` | header-only C++ kernels used by both the Python and MATLAB interfaces: map fitting (float64, or float32 with outward rounding) and the synthesis fixed points | |
@@ -126,7 +126,7 @@ u = ctrl.filter(x, u_nominal)   # closest certified-safe input to u_nominal
 
 ## Reproducing the papers
 
-`reproductions/` re-runs the numerical experiments of L4DC 2021, ADHS 2021 and TAC 2024, and [docs/REPRODUCTION.md](docs/REPRODUCTION.md) compares the results with the papers. Highlights:
+`reproductions/` re-runs the numerical experiments of L4DC 2021, ADHS 2021, TAC 2024 and Chapter 3 of the thesis, and [docs/REPRODUCTION.md](docs/REPRODUCTION.md) compares the results with the papers. Highlights:
 
 - TAC Figs. 9–10: µ = 2.70 → 2.47 as the data grow from 10⁶ to 10⁷ samples, matching the paper.
 - L4DC: the exact abstraction from 300 transitions (27 million state–input pairs) and its invariant set take 6 s instead of 923 s + 341 s.
@@ -141,6 +141,7 @@ The Python tests are in `tests/` and run in about 9 s with `pytest`. They check 
 - **Soundness**: the true system lies inside the learned map on thousands of random queries, for random monotone functions and sign patterns.
 - **Minimality**: the bounds are attained by monotone functions consistent with the data.
 - **Fast algorithms against brute force**: the grid sweep equals the theorem's formula exactly, on random non-uniform partitions with data on cell edges and outside the box. Safety and reach-avoid fixed points equal the textbook iterations (sets, step counts and allowed inputs) on random abstractions in dimensions 1–4, with every index type, in both backends.
+- **Bounded-derivative models**: all five approaches are sound for random functions with bounded derivatives, with data outside the box and a known part g. The growth-cone vertex values equal the set-membership bounds computed by brute force over all data, and the cell bounds equal their definition; restricted to two sign matrices, the all-matrix model equals the two-matrix one; `update` equals a refit on all data; the windowed update tightens exactly the window. The linear-programming final steps are certified by weak duality, so solver tolerances cannot make them unsound.
 - **Original implementation**: the grid algorithm reproduces the original MATLAB implementation (`Data2Sigma0` + `ApproximationMonotoneSystemData3`) bit for bit on random problems.
 - **Backends and languages**: the C++ and NumPy backends are bit-identical. The MATLAB code, both pure `.m` and MEX, reproduces the Python results exactly (map, abstraction, safety, reach-avoid), and the MEX fixed points equal the `.m` ones on random 1-D to 3-D abstractions. It has been run in MATLAB (MATLAB Online: tests, examples and figures) and CI runs it under Octave.
 - **Closed loop**: simulated trajectories under the synthesized controllers and the safety filter never leave the safe set and always reach the target.
