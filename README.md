@@ -67,6 +67,10 @@ Many dynamics are not monotone: a pendulum's acceleration grows with the angle u
 
 With 25 samples and no data near the ends of the interval, the two-matrix model leaves the left end unbounded; the growth-cone model bounds the whole interval and is tighter everywhere. (`python examples/bounded_derivative_map.py`)
 
+In two dimensions the model is a pair of staircases, one value per cell, around the unknown function. Here the growth-cone model with the linear-programming step (approach 5) learned from 10⁷ samples of F(z) = cos z₁ + 0.5 cos z₂ + [−0.1, 0.1] on 51 × 51 cells (the example of thesis Section 3.4); the zoom shows the steps:
+
+![Staircase bounds of the growth-cone model in 2-D](docs/figures/bounded_derivative_3d.png)
+
 **Comparing the five models.** On the two-dimensional example of the thesis, the ranking holds at every amount of data: the growth cones with the linear-programming step are the tightest, and all models get tighter with more data and finer grids. (`python reproductions/thesis_ch3.py`, details in [docs/REPRODUCTION.md](docs/REPRODUCTION.md).)
 
 ![Conservatism of the five models](docs/figures/bounded_derivative_methods.png)

@@ -74,7 +74,7 @@ Command: `python reproductions/tac_lorenz.py --full`.
 - `tac_fig12_w1.png`, `tac_fig12_w1_slices.png`: the same with `w_weight=1` (equation (32) as written). The set is **empty** (note 3), and the figures say so; they show the effect of the weight.
 - `adhs_fig3_fig5.png`, `adhs_fig6.png`: ADHS curves and 3-D controllable set.
 - `l4dc_fig5.png`: L4DC invariant set with the data points.
-- `thesis_fig3_5.png`: F and the bounds of approach 5; `thesis_fig3_6_to_3_9.png`: µ and time curves of the five approaches.
+- `thesis_fig3_5.png`: F and the transparent staircase bounds of approach 5, with a zoom where the steps are visible (as `tac_fig8.png`); `thesis_fig3_6_to_3_9.png`: µ and time curves of the five approaches.
 
 They're produced by `ddma.plotting` (`plot_staircase_bounds`, `plot_set_3d`, `plot_set_2d`). MATLAB equivalents are `ddma.plot_bounds` and `ddma.plot_set`, built the same way as the original scripts (the `kron` staircase and `isosurface`). Both were run in real MATLAB (MATLAB Online, November 2026) by `matlab/examples/paper_figures.m`: the staircase bounds of Fig. 8 and the 3-D sets of TAC Figs. 11–12 and ADHS Fig. 6 render as intended. The tests and the cruise-control example also pass there. CI checks the numbers under Octave only, because headless Octave cannot render text.
 

@@ -76,20 +76,7 @@ def main(reps, max_exp):
         out["fig3_5"][m] = {"time_s": dt, "mu": mu(P, lo, hi), "sound": sound(P, lo, hi, rng)}
         if m == "lin_growth":
             P5, lo5, hi5 = P, lo, hi
-    c = [0.5 * (e[1:] + e[:-1]) for e in P5.edges]
-    C1, C2 = np.meshgrid(*c, indexing="ij")
-    fig = plt.figure(figsize=(7, 5.2))
-    ax = fig.add_subplot(projection="3d")
-    ax.plot_surface(C1, C2, np.cos(C1) + 0.5 * np.cos(C2), color="tab:blue", alpha=0.9)
-    sl = (slice(1, -1), slice(1, -1))
-    ax.plot_surface(C1[sl], C2[sl], hi5[sl], color="tab:red", alpha=0.25)
-    ax.plot_surface(C1[sl], C2[sl], lo5[sl], color="tab:green", alpha=0.25)
-    ax.set(xlabel="$z_1$", ylabel="$z_2$")
-    ax.set_title(f"Thesis Fig. 3.5: $F$ with $d = 0$ (solid) and the bounds of approach 5\n"
-                 f"$|K| = 10^{max_exp}$, 51 x 51 cells (cell centres)", fontsize=9)
-    fig.tight_layout()
-    fig.savefig(RESULTS / "thesis_fig3_5.png", dpi=150)
-    plt.close(fig)
+    staircase_figure(P5, lo5, hi5, max_exp, RESULTS / "thesis_fig3_5.png")
 
     # Figure 3.6 (mu) and 3.8 (time, LP approaches) vs number of data, 51 x 51 cells
     exps = np.arange(3, max_exp + 0.01, 0.5)
@@ -175,6 +162,30 @@ def main(reps, max_exp):
               f"{res[m]['time'][-1]:.2f} s   sound: {out['fig3_5'][m]['sound']}")
 
 
+def staircase_figure(P, lo, hi, max_exp, out):
+    """Fig. 3.5 in the style of TAC Fig. 8: F and the transparent staircase bounds."""
+    from types import SimpleNamespace
+
+    from ddma.plotting import plot_staircase_bounds
+
+    m = SimpleNamespace(partition=P, lower=lo[..., None], upper=hi[..., None])
+    fig = plt.figure(figsize=(12, 5.2))
+    ax = fig.add_subplot(1, 2, 1, projection="3d")
+    plot_staircase_bounds(m, ax=ax, true_fn=F, trim=1)
+    ax.set(xlabel="$z_1$", ylabel="$z_2$", zlabel="bounds")
+    ax.view_init(25, -125)
+    ax.set_title(f"$F(z) = \\cos z_1 + 0.5\\cos z_2$ (solid) and the bounds of the growth-cone "
+                 f"model\n(approach 5), $|K| = 10^{max_exp}$ samples, 51 x 51 cells", fontsize=9)
+    ax = fig.add_subplot(1, 2, 2, projection="3d")
+    plot_staircase_bounds(m, ax=ax, true_fn=F, trim=1, region=(20, 26, 20, 26), alpha=0.45)
+    ax.set(xlabel="$z_1$", ylabel="$z_2$", zlabel="bounds")
+    ax.view_init(18, -115)
+    ax.set_title("zoom on 6 x 6 cells: upper and lower staircases around $F$", fontsize=9)
+    fig.tight_layout()
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+
+
 def readme_figure():
     """docs/figures/bounded_derivative_methods.png from the saved results."""
     import json
@@ -212,3 +223,12 @@ if __name__ == "__main__":
     if not a.readme_figure:
         main(a.reps, a.max_exp)
     readme_figure()
+    # 3-D staircase figure (also used in the README)
+    rng = np.random.default_rng(0)
+    Z, Y = sample(rng, 10**a.max_exp)
+    P, lo, hi, _ = fit("lin_growth", Z, Y, 50)
+    staircase_figure(P, lo, hi, a.max_exp, RESULTS / "thesis_fig3_5.png")
+    from pathlib import Path
+    staircase_figure(P, lo, hi, a.max_exp,
+                     Path(__file__).resolve().parents[1] / "docs" / "figures"
+                     / "bounded_derivative_3d.png")
