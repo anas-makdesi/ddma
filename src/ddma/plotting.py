@@ -33,7 +33,7 @@ def _staircase_grid(edges, values):
 
 def plot_staircase_bounds(sigma, output=0, ax=None, true_fn=None, trim=1, clip=None,
                           alpha=0.3, cmap="viridis", bound_color="0.25",
-                          bound_cmap="plasma", region=None):
+                          bound_cmap="plasma", region=None, cell_edges="auto"):
     """Transparent staircase upper/lower bounds of a 2-D-input simulating map.
 
     sigma : PartitionedSimulatingMap with two inputs. ``trim`` outer cells are dropped on
@@ -42,6 +42,8 @@ def plot_staircase_bounds(sigma, output=0, ax=None, true_fn=None, trim=1, clip=N
     The bounds are transparent, coloured by height with ``bound_cmap`` (or plain
     ``bound_color`` if ``bound_cmap=None``). ``region=(i0, i1, j0, j1)`` zooms on the
     cells i0 <= i < i1, j0 <= j < j1 (after trimming), where the steps are visible.
+    ``cell_edges``: draw the cell outlines on the bounds (True / False); "auto" draws them
+    only up to 30 cells per axis, since on dense grids they cover the true function.
     """
     import matplotlib.pyplot as plt
 
@@ -66,19 +68,22 @@ def plot_staircase_bounds(sigma, output=0, ax=None, true_fn=None, trim=1, clip=N
         GZ = np.asarray(true_fn(np.stack([GX.ravel(), GY.ravel()], 1))).reshape(GX.shape)
         ax.plot_surface(GX, GY, GZ, cmap=cmap, linewidth=0, antialiased=True, alpha=1.0,
                         rstride=1, cstride=1)
+    if cell_edges == "auto":
+        cell_edges = max(lo.shape) <= 30
+    lw, ec = (0.2, (0, 0, 0, 0.25)) if cell_edges else (0.0, (0, 0, 0, 0))
     cm = plt.get_cmap(bound_cmap)
     zmin = np.nanmin(lo[np.isfinite(lo)]) if np.isfinite(lo).any() else 0.0
     zmax = np.nanmax(hi[np.isfinite(hi)]) if np.isfinite(hi).any() else 1.0
     for vals in (lo, hi):
         X, Y, Z = _staircase_grid(edges, vals)
         if bound_cmap is None:
-            ax.plot_surface(X, Y, Z, color=bound_color, alpha=alpha, linewidth=0.2,
-                            edgecolor=(0, 0, 0, 0.3), shade=False)
+            ax.plot_surface(X, Y, Z, color=bound_color, alpha=alpha, linewidth=lw,
+                            edgecolor=ec, shade=False)
         else:
             fc = cm((Z - zmin) / max(zmax - zmin, 1e-12))
             fc[..., 3] = alpha
-            ax.plot_surface(X, Y, Z, facecolors=fc, linewidth=0.2,
-                            edgecolor=(0, 0, 0, 0.25), shade=False)
+            ax.plot_surface(X, Y, Z, facecolors=fc, linewidth=lw, edgecolor=ec, shade=False,
+                            antialiased=False)
     return ax
 
 

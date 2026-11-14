@@ -171,7 +171,7 @@ def staircase_figure(P, lo, hi, max_exp, out):
     m = SimpleNamespace(partition=P, lower=lo[..., None], upper=hi[..., None])
     fig = plt.figure(figsize=(12, 5.2))
     ax = fig.add_subplot(1, 2, 1, projection="3d")
-    plot_staircase_bounds(m, ax=ax, true_fn=F, trim=1)
+    plot_staircase_bounds(m, ax=ax, true_fn=F, trim=1, alpha=0.12)
     ax.set(xlabel="$z_1$", ylabel="$z_2$", zlabel="bounds")
     ax.view_init(25, -125)
     ax.set_title(f"$F(z) = \\cos z_1 + 0.5\\cos z_2$ (solid) and the bounds of the growth-cone "
