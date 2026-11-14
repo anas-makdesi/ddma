@@ -131,12 +131,13 @@ u = ctrl.filter(x, u_nominal)   # closest certified-safe input to u_nominal
 - TAC Figs. 9–10: µ = 2.70 → 2.47 as the data grow from 10⁶ to 10⁷ samples, matching the paper.
 - L4DC: the exact abstraction from 300 transitions (27 million state–input pairs) and its invariant set take 6 s instead of 923 s + 341 s.
 - TAC Lorenz example at the paper's full size (10⁸ samples, 104 million cells) on an 8 GB machine: 223 s instead of 929 s, using per-output inputs, float32 bounds and batched data. Its maximal controlled invariant set (1 million states × 101 inputs) then takes 6 s.
+- Thesis Ch. 3: the five bounded-derivative approaches rank as in the thesis at every data size (Lin + Growth tightest); all contain the true map.
 - Every synthesized controller is checked in closed loop on the true plant: 0 violations.
 - Settings the papers leave implicit (L4DC input range, ADHS experiment settings, LP weighting for the Lorenz example) are documented in the report.
 
 ## How it's tested
 
-The Python tests are in `tests/` and run in about 9 s with `pytest`. They check the guarantees rather than the outputs alone:
+The Python tests are in `tests/` and run in about 10 s with `pytest`. They check the guarantees rather than the outputs alone:
 
 - **Soundness**: the true system lies inside the learned map on thousands of random queries, for random monotone functions and sign patterns.
 - **Minimality**: the bounds are attained by monotone functions consistent with the data.
