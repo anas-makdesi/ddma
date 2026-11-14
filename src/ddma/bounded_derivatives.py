@@ -21,6 +21,16 @@ and give the model (Proposition 8)
 
     f + g + W  in  (g- + S-)  intersected with  (g+ - S+).
 
+This is approach 1 ("2 matrix") of the thesis, Section 3.4. The model offers the
+other four with ``method=`` (thesis Chapter 3; see :mod:`ddma._bd_components`):
+
+    method          thesis      idea
+    "two_matrix"    approach 1  the two transforms above, interval final step (default)
+    "all_matrix"    approach 2  all 2^n slope choices per output (coordinate flips)
+    "lin_mono"      approach 3  as "all_matrix", linear-programming final step
+    "growth"        approach 4  growth cones evaluated at the grid vertices
+    "lin_growth"    approach 5  as "growth", linear-programming final step
+
 The bounds themselves can be estimated with the scenario approach (Section IV):
 :func:`estimate_derivative_bounds`.
 """
@@ -31,11 +41,15 @@ from typing import Callable, Optional
 
 import numpy as np
 
+from ._bd_components import GrowthComponent, SignMatrixComponent
 from .abstraction import affine_bounds
 from .partition import RectangularPartition
 from .partitioned import PartitionedSimulatingMap
 
+METHODS = ("two_matrix", "all_matrix", "lin_mono", "growth", "lin_growth")
+
 __all__ = [
+    "METHODS",
     "BoundedDerivativeModel",
     "estimate_derivative_bounds",
     "scenario_confidence",
@@ -62,10 +76,18 @@ class BoundedDerivativeModel:
     memory (e.g. Lorenz: x+ depends on (x, y) only). Derivative bounds outside the listed
     coordinates are taken as zero: listing features asserts that f_i does not depend on
     the other coordinates.
+
+    ``method`` selects one of the five approaches of the thesis (module docstring).
+    All of them are sound; "lin_*" are the tightest and the slowest (one small linear
+    program per cell). "two_matrix" leaves cells unbounded where no data point lies on
+    the right side; the other methods bound every cell as soon as there is data. For
+    methods other than "two_matrix", :meth:`update` refits exactly (same result as
+    fitting all data at once), and for "growth" / "lin_growth" :meth:`update_local`
+    offers the cheaper windowed update.
     """
 
     def __init__(self, partition, n_x, groups, Am, Ap, Bm, Bp, g, g_bounds, d_lo, d_hi,
-                 backend, compact):
+                 backend, compact, method="two_matrix", components=None):
         self.partition = partition
         self.n_x = n_x
         self.groups = groups  # list of (features, outputs, map_minus, map_plus)
@@ -73,6 +95,8 @@ class BoundedDerivativeModel:
         self.g, self.g_bounds = g, g_bounds
         self.d_lo, self.d_hi = d_lo, d_hi
         self.backend, self.compact = backend, compact
+        self.method = method
+        self.components = components  # list of (features, component), one per output
         self._gm = affine_bounds(Am, Bm)
         self._gp = affine_bounds(Ap, Bp)
 
@@ -83,14 +107,14 @@ class BoundedDerivativeModel:
     @property
     def sigma_minus(self):
         """Map of f- (only when all outputs share one set of inputs)."""
-        if len(self.groups) != 1:
-            raise AttributeError("several feature groups: use model.groups")
+        if self.components is not None or len(self.groups) != 1:
+            raise AttributeError("only for method='two_matrix' with one feature group")
         return self.groups[0][2]
 
     @property
     def sigma_plus(self):
-        if len(self.groups) != 1:
-            raise AttributeError("several feature groups: use model.groups")
+        if self.components is not None or len(self.groups) != 1:
+            raise AttributeError("only for method='two_matrix' with one feature group")
         return self.groups[0][3]
 
     @classmethod
@@ -111,14 +135,18 @@ class BoundedDerivativeModel:
         backend: str = "auto",
         features=None,
         compact: bool = False,
+        method: str = "two_matrix",
     ) -> BoundedDerivativeModel:
         """Learn the model from transitions (x_k, u_k, x'_k).
 
         ``partition`` partitions the joint (x, u) box. ``g`` (vectorized, (X, U) -> R^n)
         and ``g_bounds`` (interval bounds of g over boxes, see :func:`ddma.affine_bounds`)
         describe the known part; leave both None when g = 0. ``features``: see the class
-        docstring. ``compact=True`` stores the bounds as float32, rounded outward.
+        docstring. ``compact=True`` stores the bounds as float32, rounded outward
+        ("two_matrix", "all_matrix", "lin_mono"). ``method``: see the class docstring.
         """
+        if method not in METHODS:
+            raise ValueError(f"method must be one of {METHODS}")
         X = np.atleast_2d(np.asarray(X, float))
         U = np.atleast_2d(np.asarray(U, float))
         n_x, n_u = X.shape[1], U.shape[1]
@@ -141,8 +169,27 @@ class BoundedDerivativeModel:
         for i, f in enumerate(features):
             by_feats.setdefault(tuple(int(j) for j in f), []).append(i)
         groups = [(list(f), outs, None, None) for f, outs in by_feats.items()]
+        components = None
+        if method != "two_matrix":
+            g_lo_all = np.hstack([np.atleast_2d(np.asarray(A_lo, float)),
+                                  np.atleast_2d(np.asarray(B_lo, float))])
+            g_hi_all = np.hstack([np.atleast_2d(np.asarray(A_hi, float)),
+                                  np.atleast_2d(np.asarray(B_hi, float))])
+            final = "lp" if method.startswith("lin_") else "box"
+            components = []
+            for i, f in enumerate(features):
+                f = [int(j) for j in f]
+                P = partition.project(f)
+                gl, gh = g_lo_all[i, f], g_hi_all[i, f]
+                if method in ("growth", "lin_growth"):
+                    comp = GrowthComponent(P, gl, gh, d_lo[i], d_hi[i], final=final)
+                else:
+                    comp = SignMatrixComponent(P, gl, gh, d_lo[i], d_hi[i], final=final,
+                                               backend=backend, compact=compact)
+                components.append((f, comp))
+            groups = []
         model = cls(partition, n_x, groups, Am, Ap, Bm, Bp, g, g_bounds, d_lo, d_hi,
-                    backend, compact)
+                    backend, compact, method, components)
         model.update(X, U, Xnext)
         return model
 
@@ -152,11 +199,20 @@ class BoundedDerivativeModel:
         y_plus = (gx + X @ self.Ap.T + U @ self.Bp.T) - Xn
         return np.hstack([X, U]), y_minus, y_plus
 
+    def _component_data(self, X, U, Xn):
+        gx = np.zeros_like(Xn) if self.g is None else self.g(X, U)
+        return np.hstack([X, U]), Xn - gx
+
     def update(self, X, U, Xnext) -> BoundedDerivativeModel:
         """Add a batch of transitions (in place; maps are intersected, TAC Prop. 3)."""
         X = np.atleast_2d(np.asarray(X, float))
         U = np.atleast_2d(np.asarray(U, float))
         Xn = np.atleast_2d(np.asarray(Xnext, float))
+        if self.components is not None:
+            Z, Y = self._component_data(X, U, Xn)
+            for i, (f, comp) in enumerate(self.components):
+                comp.update(Z[:, f], Y[:, i])
+            return self
         Z, ym, yp = self._transformed(X, U, Xn)
         for k, (feats, outs, sm, sp) in enumerate(self.groups):
             P = self.partition.project(feats)
@@ -173,9 +229,46 @@ class BoundedDerivativeModel:
             self.groups[k] = (feats, outs, sm, sp)
         return self
 
+    def update_local(self, X, U, Xnext, window) -> BoundedDerivativeModel:
+        """Windowed update for "growth" / "lin_growth" (thesis Section 3.2, Prop. 13).
+
+        Each transition tightens the model only on the cells within ``window`` cells of
+        its own cell (an int, or one int per coordinate of the output's features). Meant
+        for online use, one or a few points at a time. Sound; not as tight as
+        :meth:`update`, which spreads each point over the whole grid.
+        """
+        if self.method not in ("growth", "lin_growth"):
+            raise ValueError("update_local is available for method='growth' or 'lin_growth'")
+        X = np.atleast_2d(np.asarray(X, float))
+        U = np.atleast_2d(np.asarray(U, float))
+        Xn = np.atleast_2d(np.asarray(Xnext, float))
+        Z, Y = self._component_data(X, U, Xn)
+        for i, (f, comp) in enumerate(self.components):
+            w = window if np.ndim(window) == 0 else np.asarray(window)[f]
+            comp.update_local(Z[:, f], Y[:, i], w)
+        return self
+
+    def f_bounds_at(self, joint_idx):
+        """Bounds of f(x, u) + W per cell, without g (methods other than "two_matrix")."""
+        if self.components is None:
+            raise AttributeError("available for methods other than 'two_matrix'")
+        joint_idx = np.atleast_2d(np.asarray(joint_idx, np.intp))
+        lo = np.empty((joint_idx.shape[0], self.n_x))
+        hi = np.empty_like(lo)
+        for i, (f, comp) in enumerate(self.components):
+            ix = tuple(joint_idx[:, f].T)
+            lo[:, i], hi[:, i] = comp.lower[ix], comp.upper[ix]
+        return lo, hi
+
     def successor_bounds(self, joint_idx, x_lo, x_hi, u_lo, u_hi):
         """Box containing f(x, u) + g(x, u) + W for all (x, u) in the given cells."""
         joint_idx = np.atleast_2d(joint_idx)
+        if self.components is not None:
+            lo, hi = self.f_bounds_at(joint_idx)
+            if self.g_bounds is not None:
+                g_lo, g_hi = self.g_bounds(x_lo, x_hi, u_lo, u_hi)
+                lo, hi = lo + g_lo, hi + g_hi
+            return lo, hi
         k = joint_idx.shape[0]
         sm_lo = np.empty((k, self.n_x))
         sm_hi = np.empty((k, self.n_x))
