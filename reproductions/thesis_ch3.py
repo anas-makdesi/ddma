@@ -175,9 +175,40 @@ def main(reps, max_exp):
               f"{res[m]['time'][-1]:.2f} s   sound: {out['fig3_5'][m]['sound']}")
 
 
+def readme_figure():
+    """docs/figures/bounded_derivative_methods.png from the saved results."""
+    import json
+    from pathlib import Path
+
+    d = json.loads((RESULTS / "thesis_ch3.json").read_text())
+    colors = {"two_matrix": "#e76f51", "all_matrix": "#f4a261", "lin_mono": "#e9c46a",
+              "growth": "#264653", "lin_growth": "#2a9d8f"}
+    fig, axs = plt.subplots(1, 2, figsize=(9, 3.6))
+    for m in METHODS:
+        axs[0].plot(d["fig3_6_log10_K"], d["fig3_6"][m]["mu"], "o-", ms=3, color=colors[m],
+                    label=LABELS[m])
+        axs[1].plot(d["fig3_9_cells"], d["fig3_9"][m], "o-", ms=3, color=colors[m])
+    axs[0].set(xlabel=r"number of samples ($\log_{10}$)", ylabel=r"conservatism $\mu$",
+               title="51 x 51 cells")
+    axs[1].set(xlabel="number of cells", ylabel=r"conservatism $\mu$",
+               title=r"$10^4$ samples", ylim=(0, 21))
+    axs[0].legend(fontsize=8, frameon=False)
+    fig.suptitle(r"Five models of $F(z) = \cos z_1 + 0.5 \cos z_2 + [-0.1, 0.1]$"
+                 r" (lower $\mu$ = tighter; 1 = exact)", fontsize=10)
+    fig.tight_layout()
+    figdir = Path(__file__).resolve().parents[1] / "docs" / "figures"
+    out = figdir / "bounded_derivative_methods.png"
+    fig.savefig(out, dpi=160)
+    print(f"saved {out}")
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--reps", type=int, default=5)
     ap.add_argument("--max-exp", type=int, default=7)
+    ap.add_argument("--readme-figure", action="store_true",
+                    help="only redraw the README figure from the saved results")
     a = ap.parse_args()
-    main(a.reps, a.max_exp)
+    if not a.readme_figure:
+        main(a.reps, a.max_exp)
+    readme_figure()

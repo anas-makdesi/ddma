@@ -6,25 +6,28 @@
 
 > A. Makdesi, A. Girard, L. Fribourg. *Data-Driven Models of Monotone Systems.* IEEE Transactions on Automatic Control, 69, pp. 5294–5309, 2024. [doi:10.1109/TAC.2023.3346793](https://doi.org/10.1109/TAC.2023.3346793)
 
-It also provides models for systems with bounded derivatives (TAC 2024, Section III-C; five approaches from the thesis, Chapter 3), and the symbolic abstractions and controller synthesis built on top of them (L4DC 2021, ADHS 2021). More model classes are planned (see the roadmap).
+and models of systems that are **not monotone but have bounded derivatives** (TAC 2024, Section III-C, and the five approaches of the PhD thesis, Chapter 3), with the symbolic abstractions and controller synthesis built on top of them (L4DC 2021, ADHS 2021). More model classes are planned (see the roadmap).
 
-**Python and MATLAB.** Both interfaces share one C++ core, they are tested against each other, and the experiments of all three papers are reproduced (see [docs/REPRODUCTION.md](docs/REPRODUCTION.md)).
+**Python and MATLAB.** Both interfaces share one C++ core, they are tested against each other, and the experiments of the three papers and of the thesis chapter are reproduced (see [docs/REPRODUCTION.md](docs/REPRODUCTION.md)). The bounded-derivative methods of v0.4 are in Python so far.
 
 ![Minimal simulating map of a scalar monotone map](docs/figures/scalar_map.png)
 
 ## The idea
 
-Suppose part of your system's dynamics is unknown, but you know two things about it:
+Suppose part of your system's dynamics is unknown, but you know a little about its shape:
 
-- it is **monotone**: larger states and inputs lead to larger next states (true for many thermal, traffic, vehicle and chemical processes);
-- the disturbance is bounded by known limits.
+- it is **monotone**: larger states and inputs lead to larger next states (true for many thermal, traffic, vehicle and chemical processes); or
+- its **partial derivatives are bounded**: each output changes at most so fast, in each direction, with each state and input (true for most physical systems; the bounds can also be estimated from data, with a probabilistic guarantee);
+- and the disturbance is bounded by known limits.
 
-From a set of measured transitions, `ddma` computes the **tightest set-valued model** that is guaranteed to contain the true system. No model class is fitted and no Lipschitz constant has to be guessed. The model is:
+From a set of measured transitions, `ddma` computes a **set-valued model** that is guaranteed to contain the true system. No model class is fitted. For monotone systems the model is:
 
 - **sound**: it contains every monotone system that could have produced the data, so it contains the true one;
 - **minimal**: no smaller set-valued model has that guarantee (proved in the TAC paper);
 - **fast to compute**: on a grid with |Q| cells and |K| samples it takes O(|K| log|Q| + |Q|) time, in a compiled C++ kernel: 10 million samples take 0.2 s;
 - **easy to update**: new data refines the model by intersection, without revisiting the old data.
+
+For systems with bounded derivatives, five models trade tightness against speed (below); all are sound, can be updated with new data, and the growth-cone models can be updated locally while the system runs.
 
 The learned model gives a finite abstraction of the system. Controllers synthesized on it (safety, reach-avoid) carry over to the real system with guarantees.
 
@@ -48,6 +51,39 @@ Times measured on a single CPU core in a cloud container; they vary from run to 
 Without the filter, the naive controller drops below the 10 m gap after 9 s and collides at 11.5 s. With the filter, the gap stays above 11 m for the full 200 s.
 
 (`python examples/adaptive_cruise_control.py` reproduces the table and figures.)
+
+## Systems that are not monotone: bounded derivatives
+
+Many dynamics are not monotone: a pendulum's acceleration grows with the angle up to 90° and then falls. What is usually known is how fast each output can change with each variable, i.e. bounds on the partial derivatives. From such bounds and data, `BoundedDerivativeModel` learns a guaranteed model on a grid of cells. It implements the five approaches of the thesis (Chapter 3), chosen with `method=`:
+
+| `method=` | idea | when to use it |
+|---|---|---|
+| `"two_matrix"` (default) | subtract the steepest linear trends so that two monotone functions remain, learn both, intersect | fastest; cells far from the data stay unbounded |
+| `"all_matrix"` | the same with every combination of slopes per output (2ⁿ monotone maps, one per orientation) | tighter, bounds every cell |
+| `"growth"` | each sample bounds the function inside a cone set by the derivative bounds; the tightest bound at every grid vertex is computed exactly, in one forward and one backward sweep per axis | as tight as `"all_matrix"`, bounds every cell, can be updated locally online (`update_local`) |
+| `"lin_mono"`, `"lin_growth"` | the same with a small linear program per cell for the final step | tightest; slower on large grids (bounds certified by duality, so solver tolerances cannot make them unsound) |
+
+![Models of a map that is not monotone](docs/figures/bounded_derivative_map.png)
+
+With 25 samples and no data near the ends of the interval, the two-matrix model leaves the left end unbounded; the growth-cone model bounds the whole interval and is tighter everywhere. (`python examples/bounded_derivative_map.py`)
+
+**Comparing the five models.** On the two-dimensional example of the thesis, the ranking holds at every amount of data: the growth cones with the linear-programming step are the tightest, and all models get tighter with more data and finer grids. (`python reproductions/thesis_ch3.py`, details in [docs/REPRODUCTION.md](docs/REPRODUCTION.md).)
+
+![Conservatism of the five models](docs/figures/bounded_derivative_methods.png)
+
+**Example: keeping an inverted pendulum upright.** The pendulum's dynamics are learned from 10⁶ transitions on θ ∈ [−2, 2] rad, where they are not monotone, with only the derivative bounds known. On 101 × 101 state cells and 25 input cells, the certified safe region (states from which the pendulum can be kept within the box forever, with torque |u| ≤ 6) covers 16.1 % of the box with the two-matrix model and 17.8 % with the growth cones + LP; every model's controller gives 0 violations in 100 closed-loop runs on the true pendulum.
+
+![Certified safe region of the inverted pendulum](docs/figures/pendulum_invariant.png)
+
+| model | learn model | build abstraction | synthesis | safe region |
+|---|---:|---:|---:|---:|
+| `two_matrix` | 0.3 s | 0.1 s | 0.01 s | 16.1 % |
+| `all_matrix` | 1.1 s | 0.1 s | 0.01 s | 17.4 % |
+| `growth` | 1.1 s | 0.1 s | 0.01 s | 17.6 % |
+| `lin_mono` | 23 s | 0.1 s | 0.01 s | 17.6 % |
+| `lin_growth` | 26 s | 0.1 s | 0.01 s | 17.8 % |
+
+(`python examples/pendulum_bounded_derivatives.py`; times on one CPU core, indicative.)
 
 ## Install
 
@@ -107,6 +143,26 @@ ctrl = safety(abst, abst.cells_inside(safe_lo, safe_hi))
 u = ctrl.filter(x, u_nominal)   # closest certified-safe input to u_nominal
 ```
 
+When f is not monotone but its partial derivatives are bounded (df_i/dx_j in [A_lo, A_hi], df_i/du_j in [B_lo, B_hi]), the model replaces the simulating map, and g is passed to it:
+
+```python
+from ddma import BoundedDerivativeModel, estimate_derivative_bounds
+
+# bounds known from physics, or estimated from data (scenario approach):
+# a_lo, a_hi, w = estimate_derivative_bounds(np.hstack([X, U]), X_next - g(X, U))
+grid = RectangularPartition.product(Xgrid, Ugrid)
+model = BoundedDerivativeModel.from_data(X, U, X_next, grid, A_lo, A_hi, B_lo, B_hi,
+                                         d_lo, d_hi, g=g, g_bounds=affine_bounds(A, B),
+                                         method="growth")
+abst = SymbolicAbstraction(Xgrid, Ugrid, model)
+ctrl = safety(abst, abst.cells_inside(safe_lo, safe_hi))
+
+# online: refine near new data, update only what changed, keep the old safe set
+model.update_local(x_new, u_new, x_next_new, window=3)
+abst.refresh()
+ctrl = safety(abst, abst.cells_inside(safe_lo, safe_hi), known_winning=ctrl.domain)
+```
+
 ## What's in the package
 
 | module | contents | source |
@@ -150,18 +206,18 @@ The Python tests are in `tests/` and run in about 10 s with `pytest`. They check
 
 ## Roadmap
 
-Next: a Gymnasium safety filter for reinforcement learning, online refinement (safe learning-based MPC), partition optimisation, and pre-built wheels. See [docs/ROADMAP.md](docs/ROADMAP.md).
+Next: the v0.4 bounded-derivative models in the C++ core and MATLAB, a Gymnasium safety filter for reinforcement learning, safe learning-based MPC, partition optimisation, and pre-built wheels. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Authors
 
 - **Anas Makdesi**: implementation and maintenance.
-- **Antoine Girard** (Université Paris-Saclay, CNRS, CentraleSupélec, L2S) and **Laurent Fribourg** (Université Paris-Saclay, CNRS, ENS Paris-Saclay, LMF): co-authors of the methods implemented here (L4DC 2021, ADHS 2021, TAC 2024).
+- **Antoine Girard** (Université Paris-Saclay, CNRS, CentraleSupélec, L2S) and **Laurent Fribourg** (Université Paris-Saclay, CNRS, ENS Paris-Saclay, LMF): co-authors of the methods implemented here (L4DC 2021, ADHS 2021, TAC 2024) and supervisors of the PhD thesis.
 
 The methods come from the papers above. This package was rewritten from the original MATLAB research code with the help of Claude (Anthropic): the Python package, the C++ core, the tests and the reproductions of the papers' experiments.
 
 ## Citing
 
-If you use this software, please cite the TAC paper (see `CITATION.cff`):
+If you use this software, please cite the TAC paper (see `CITATION.cff`), and for the bounded-derivative models also the thesis:
 
 ```bibtex
 @article{makdesi2024datadriven,
@@ -172,6 +228,14 @@ If you use this software, please cite the TAC paper (see `CITATION.cff`):
   pages   = {5294--5309},
   year    = {2024},
   doi     = {10.1109/TAC.2023.3346793}
+}
+
+@phdthesis{makdesi2023thesis,
+  title  = {Data-driven abstractions for the safe learning of nonlinear systems},
+  author = {Makdesi, Anas},
+  school = {Universit{\'e} Paris-Saclay},
+  year   = {2023},
+  note   = {NNT 2023UPASG103, HAL tel-04611772}
 }
 ```
 

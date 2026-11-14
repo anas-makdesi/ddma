@@ -4,7 +4,7 @@ Planned work, roughly in order. Contributions and suggestions are welcome throug
 
 ## Applications
 - **Safety filter for reinforcement learning**: a Gymnasium wrapper that puts a certified ddma safety filter around any agent, with a demo where a PPO agent learns while staying safe.
-- **Online refinement and safe learning-based MPC**: refine the model and the safety controller while the system runs, as data arrive (compatible-models approach).
+- **Safe learning-based MPC**: the online refinement of the model and the safety controller is in v0.4 (`update_local`, `refresh`, incremental `safety`); next are the compatible estimates and the MPC that uses them (compatible-models approach).
 
 ## Methods
 - **Partition optimisation**: choose the cut points of the rectangular partition to minimise the over-approximation for a given number of cells (CCTA 2025).
@@ -16,6 +16,7 @@ Planned work, roughly in order. Contributions and suggestions are welcome throug
 - Streaming fit with constant memory for any number of samples.
 - Non-uniform and adaptive partitions that refine where the specification is decided.
 - Lazy abstractions in the MATLAB interface (Python has them since v0.3).
+- Bounded-derivative models of v0.4 in the C++ core and in MATLAB (growth-cone fit first).
 
 ## Distribution
 - Documentation site with API reference and tutorial notebooks.

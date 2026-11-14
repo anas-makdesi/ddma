@@ -15,7 +15,7 @@ the maximal controlled invariant set inside the box [-2, 2] x [-4, 4] (|u| <= 6,
 the pendulum cannot be held beyond about 0.6 rad); each controller is then run for
 300 steps on the true pendulum from 100 random states of its invariant set.
 
-Run:  python examples/pendulum_bounded_derivatives.py
+Run:  python examples/pendulum_bounded_derivatives.py   (writes docs/figures/pendulum_invariant.png)
 """
 
 import time
@@ -97,20 +97,38 @@ def main(n_data=10**6, cells=(101, 101), n_u=25, methods=None, seed=0):
 
 
 if __name__ == "__main__":
+    from pathlib import Path
+
     import matplotlib.pyplot as plt
 
     res, Px = main()
     c = [0.5 * (e[1:] + e[:-1]) for e in Px.edges]
-    fig, ax = plt.subplots(figsize=(6, 4.5))
-    colors = {"two_matrix": "#9b9b9b", "all_matrix": "#e9c46a", "lin_mono": "#f4a261",
-              "growth": "#2a9d8f", "lin_growth": "#264653"}
-    for m, (ctrl, *_) in res.items():
+    fig, ax = plt.subplots(figsize=(7, 4.2))
+    best = res["lin_growth"][0]
+    ax.contourf(c[0], c[1], best.domain_grid().T.astype(float), levels=[0.5, 1.5],
+                colors=["#2a9d8f"], alpha=0.35)
+    ax.plot([], [], "s", color="#2a9d8f", alpha=0.5, ms=10,
+            label=f"growth cones + LP (approach 5): {100 * best.winning_fraction():.1f} %")
+    for m, col, lab in (("growth", "#264653", "growth cones (approach 4)"),
+                        ("two_matrix", "#e76f51", "two matrices (approach 1)")):
+        ctrl = res[m][0]
         ax.contour(c[0], c[1], ctrl.domain_grid().T.astype(float), levels=[0.5],
-                   colors=colors[m], linewidths=1.5)
-        ax.plot([], [], color=colors[m], label=f"{m}: {100 * ctrl.winning_fraction():.1f} %")
-    ax.set(xlabel=r"$\theta$ (rad)", ylabel=r"$\omega$ (rad/s)",
-           title="Maximal controlled invariant set of the learned pendulum")
-    ax.legend(fontsize=8)
+                   colors=[col], linewidths=1.3)
+        ax.plot([], [], color=col, label=f"{lab}: {100 * ctrl.winning_fraction():.1f} %")
+    rng = np.random.default_rng(3)
+    dom = np.flatnonzero(best.domain)
+    starts = Px.cell_centers(Px.all_indices()[rng.choice(dom, 3, replace=False)])
+    for x0 in starts:
+        xs, _ = simulate(step, best, x0, 400, rng=rng, pick="random")
+        ax.plot(xs[:, 0], xs[:, 1], color="#f4a261", lw=0.9)
+        ax.plot(*xs[0], "o", color="#f4a261", ms=4)
+    ax.plot([], [], color="#f4a261", label="closed loop on the true pendulum")
+    ax.set(xlabel=r"angle $\theta$ from upright [rad]", ylabel=r"angular velocity $\omega$ [rad/s]",
+           xlim=(-2, 2), ylim=(-4, 4))
+    ax.set_title("Inverted pendulum learned from data: certified safe region (share of the box)",
+                 fontsize=10)
+    ax.legend(loc="lower left", fontsize=8, frameon=False)
     fig.tight_layout()
-    fig.savefig("pendulum_invariant_sets.png", dpi=150)
-    print("saved pendulum_invariant_sets.png")
+    out = Path(__file__).resolve().parents[1] / "docs" / "figures" / "pendulum_invariant.png"
+    fig.savefig(out, dpi=160)
+    print(f"saved {out}")
