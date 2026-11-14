@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.0 (14 November 2026)
+
+- `GrowthMap`: the growth-cone model of one scalar function with bounded derivatives, usable on its own (`from_data`, `update`, `update_local`, `bounds`, `f_bounds`, `copy`). Same bounds as `BoundedDerivativeModel(method="growth")` for one output; `local="slab"` by default.
+- Growth-cone models: small batches (online use) are added point by point, each cone evaluated directly at all vertices and on its slabs, and the all-cell final step reuses per-corner offsets. Same model as before (tested against the batch refit); a single point on a 40 x 40 grid now takes about 0.1 ms instead of 0.6 ms.
+
 ## 0.4.0 (14 November 2026)
 
 **Models of systems with bounded derivatives** (thesis, Chapter 3)

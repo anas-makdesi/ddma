@@ -167,6 +167,17 @@ abst.refresh()
 ctrl = safety(abst, abst.cells_inside(safe_lo, safe_hi), known_winning=ctrl.domain)
 ```
 
+For one scalar function on its own (e.g. a vehicle's turn rate as a function of speed and steering), `GrowthMap` is the same growth-cone model without the system structure:
+
+```python
+from ddma import GrowthMap
+
+grid = RectangularPartition.uniform([0.1, -0.79], [2.0, 0.79], [40, 40])   # (speed, steering)
+w = GrowthMap.from_data(Z, y, grid, g_lo=[-10, 1], g_hi=[10, 40], d_lo=-0.05, d_hi=0.05)
+lo, hi = w.bounds(z_query)       # guaranteed bounds on f(z) + d at the cells of z_query
+w.update(z_new[None], [y_new])   # one measurement at a time: about 0.1 ms on this grid
+```
+
 ## What's in the package
 
 | module | contents | source |
@@ -179,6 +190,7 @@ ctrl = safety(abst, abst.cells_inside(safe_lo, safe_hi), known_winning=ctrl.doma
 | `SymbolicAbstraction(..., lazy=True)` | no transitions stored: `safety` evaluates a transition only when its scan reaches it (states outside the safe set are never expanded, each state stops at its first good input). Memory O(\|Q\|) instead of O(\|Q\|·\|P\|); the controller computes its allowed inputs on demand. Same winning set. Python only | standard fixed point, transitions computed on demand |
 | `Controller` | concrete inputs (`pick=`), **safety filter** (`filter`), closed-loop `simulate` | |
 | `BoundedDerivativeModel` | unknown dynamics that are *not* monotone but have bounded partial derivatives. `method=`: `"two_matrix"` (two monotone maps, intersected; default), `"all_matrix"` (all sign combinations of the derivative bounds), `"growth"` (growth cones evaluated at the grid vertices, exact set-membership values there in one sweep per axis), and `"lin_mono"`, `"lin_growth"` (the same with a linear-programming final step, tightest). `update` adds data exactly; `update_local` (growth cones) updates only a window of cells around each new point, for online use. `local="cell"` / `"slab"` (growth cones) also intersects with the cones of the data points in each cell / in its slabs; `"slab"` is never looser than the min over data of each cone's max over the cell | TAC, Prop. 8; thesis Ch. 3 |
+| `GrowthMap` | the growth-cone model for one scalar function on its own: exact `update` (a per-point path for online use gives the same model as a batch refit), `update_local`, `bounds`, `f_bounds` | thesis Ch. 3 |
 | online refinement | `SymbolicAbstraction.refresh()` recomputes only the transitions of the states changed by `update_local`; `safety(..., known_winning=previous_set)` updates the maximal invariant set exactly, keeping the previous set (which stays controlled invariant when the model is refined) | |
 | `estimate_derivative_bounds`, `scenario_confidence` | derivative and disturbance bounds from data, with the scenario-approach guarantee | TAC, Sec. IV, Prop. 9 |
 | `SymbolicAbstraction(..., assumption=)` | assume-guarantee contracts (e.g. "if the leader's speed stays in [a, b] …") | ADHS, TAC |

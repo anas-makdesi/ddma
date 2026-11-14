@@ -4,7 +4,7 @@ Planned work, roughly in order. Contributions and suggestions are welcome throug
 
 ## Applications
 - **Safety filter for reinforcement learning**: a Gymnasium wrapper that puts a certified ddma safety filter around any agent, with a demo where a PPO agent learns while staying safe.
-- **Safe learning-based MPC**: the online refinement of the model and the safety controller is in v0.4 (`update_local`, `refresh`, incremental `safety`); next are the compatible estimates and the MPC that uses them (compatible-models approach).
+- **Safe learning-based MPC**: the online refinement of the model and the safety controller is in v0.4 (`update_local`, `refresh`, incremental `safety`); the compatible estimates and the MPC that uses them (compatible-models approach) are developed in a separate package that uses `GrowthMap` (v0.5).
 
 ## Methods
 - **Partition optimisation**: choose the cut points of the rectangular partition to minimise the over-approximation for a given number of cells (CCTA 2025).

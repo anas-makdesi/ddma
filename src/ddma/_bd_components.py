@@ -284,15 +284,71 @@ class GrowthComponent:
             np.maximum(lo, np.flip(w, j) + gh * e, out=lo)
         return lo, up
 
+    #: batches up to this size use the per-point path of :meth:`update` (same result)
+    FAST_BATCH = 32
+
     def update(self, Z, y):
-        """Add data. Exact: equals a refit on all data seen so far."""
-        lo, up = self.vertex_values(Z, y)
+        """Add data. Exact: equals a refit on all data seen so far.
+
+        Small batches (online use, one measurement at a time) evaluate each new cone
+        directly at all vertices and on its slabs, which gives the same vertex values as
+        :meth:`vertex_values` without the running min/max sweeps."""
+        Z = np.atleast_2d(np.asarray(Z, float))
+        y = np.asarray(y, float).ravel()
+        if y.size <= self.FAST_BATCH:
+            for z, yk in zip(Z, y):
+                self._add_point(z, float(yk))
+        else:
+            lo, up = self.vertex_values(Z, y)
+            np.minimum(self.v_upper, up, out=self.v_upper)
+            np.maximum(self.v_lower, lo, out=self.v_lower)
+            if self.local is not None:
+                self._local_update(Z, y)
+        self._finalize()
+
+    def _add_point(self, z, y):
+        """One point: its cone at every vertex (separable outer sum) and on its slabs."""
+        P = self.partition
+        n = P.ndim
+        up = y + self.theta
+        lo = y - self.theta
+        cu, cl = [], []
+        for j, e in enumerate(P.edges):
+            t = e - z[j]
+            sh = [1] * n
+            sh[j] = e.size
+            up = up + np.maximum(self.g_hi[j] * t, self.g_lo[j] * t).reshape(sh)
+            lo = lo + np.minimum(self.g_hi[j] * t, self.g_lo[j] * t).reshape(sh)
+            if self.local is not None:
+                tu, tl = self._axis_terms(z[j:j + 1], j, 0, e.size - 2)
+                cu.append(tu[0])
+                cl.append(tl[0])
         np.minimum(self.v_upper, up, out=self.v_upper)
         np.maximum(self.v_lower, lo, out=self.v_lower)
-        if self.local is not None:
-            self._local_update(np.atleast_2d(np.asarray(Z, float)),
-                               np.asarray(y, float).ravel())
-        self._finalize()
+        if self.local is None:
+            return
+        cell = self._cells(z[None])[0]
+        if self.local == "cell":
+            idx = tuple(cell)
+            self.loc_upper[idx] = min(self.loc_upper[idx],
+                                      y + self.theta + sum(cu[j][cell[j]] for j in range(n)))
+            self.loc_lower[idx] = max(self.loc_lower[idx],
+                                      y - self.theta + sum(cl[j][cell[j]] for j in range(n)))
+            return
+        for j in range(n):  # slab j: all cells whose index on axis j is the point's
+            su = y + self.theta + cu[j][cell[j]]
+            sl_ = y - self.theta + cl[j][cell[j]]
+            for i in range(n):
+                if i != j:
+                    sh = [1] * n
+                    sh[i] = cu[i].size
+                    su = su + cu[i].reshape(sh)
+                    sl_ = sl_ + cl[i].reshape(sh)
+            idx = [slice(None)] * n
+            idx[j] = slice(int(cell[j]), int(cell[j]) + 1)
+            idx = tuple(idx)
+            np.minimum(self.loc_upper[idx], su, out=self.loc_upper[idx])
+            np.maximum(self.loc_lower[idx], sl_, out=self.loc_lower[idx])
 
     # -------------------------------------------------------------- final step
     def _finalize(self, block=None):
@@ -306,6 +362,9 @@ class GrowthComponent:
         else:
             first, last = block
         cshape = tuple(int(b - a + 1) for a, b in zip(first, last))
+        if block is None and self.final == "box":
+            self._finalize_full_box()
+            return
         h = []
         clo = []
         for j, e in enumerate(P.edges):
@@ -349,6 +408,39 @@ class GrowthComponent:
             lower = np.maximum(lower, self.loc_lower[sl])
         self.upper[sl] = upper
         self.lower[sl] = lower
+
+    def _finalize_full_box(self):
+        """Same as ``_finalize()`` with the box final step on all cells, with the per-corner
+        offsets (which depend only on the grid and the slopes) computed once."""
+        P = self.partition
+        n = P.ndim
+        if getattr(self, "_full_box_cache", None) is None:
+            h = []
+            for j, e in enumerate(P.edges):
+                sh = [1] * n
+                sh[j] = e.size - 1
+                h.append(np.diff(e).reshape(sh))
+            gl, gh = self.g_lo, self.g_hi
+            cache = []
+            for b in self._corners:
+                sl = tuple(slice(int(b[j]), int(b[j]) + P.shape[j]) for j in range(n))
+                ru = sum(np.maximum(0.0, (gh[j] if b[j] == 0 else -gl[j]) * h[j])
+                         for j in range(n))
+                rl = sum(np.minimum(0.0, (gl[j] if b[j] == 0 else -gh[j]) * h[j])
+                         for j in range(n))
+                cache.append((sl, np.broadcast_to(ru, P.shape), np.broadcast_to(rl, P.shape)))
+            self._full_box_cache = cache
+        upper = np.full(P.shape, np.inf)
+        lower = np.full(P.shape, -np.inf)
+        with np.errstate(invalid="ignore"):
+            for sl, ru, rl in self._full_box_cache:
+                np.minimum(upper, self.v_upper[sl] + ru, out=upper)
+                np.maximum(lower, self.v_lower[sl] + rl, out=lower)
+        if self.local is not None:
+            np.minimum(upper, self.loc_upper, out=upper)
+            np.maximum(lower, self.loc_lower, out=lower)
+        self.upper[...] = upper
+        self.lower[...] = lower
 
     # -------------------------------------------------------------- local update
     def update_local(self, Z, y, window):
