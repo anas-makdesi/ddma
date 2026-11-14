@@ -4,12 +4,18 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ddma"
-version = "0.8.0"
+version = "0.9.0"
 description = "Data-driven models and abstractions with guarantees: models of monotone systems and systems with bounded derivatives, symbolic abstractions and correct-by-construction controllers from data."
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
-authors = [{ name = "Anas Makdesi" }, { name = "Antoine Girard" }, { name = "Laurent Fribourg" }]
+authors = [
+  { name = "Anas Makdesi" },
+  { name = "Antoine Girard" },
+  { name = "Laurent Fribourg" },
+  { name = "Majid Zamani" },
+  { name = "Saber Jafarpour" },
+]
 keywords = ["control", "monotone systems", "data-driven control", "abstraction", "formal methods", "safety"]
 classifiers = [
   "Programming Language :: Python :: 3",

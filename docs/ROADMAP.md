@@ -6,8 +6,7 @@ Planned work, roughly in order. Contributions and suggestions are welcome throug
 - **Safe learning-based MPC**: the online refinement of the model and the safety controller is in v0.4 (`update_local`, `refresh`, incremental `safety`); the compatible estimates and the MPC that uses them (compatible-models approach) are developed in a separate package that uses `GrowthMap` (v0.5).
 
 ## Methods
-- **Partition optimisation**: choose the cut points of the rectangular partition to minimise the over-approximation for a given number of cells (CCTA 2025).
-- **Controlled invariance via monotone embeddings**: data-driven controlled invariant sets for systems that are not monotone.
+- **Safe envelopes in the safety filters**: use the gridless envelopes of v0.9 as the safe set of the RL safety filter and of the safe learning-based MPC.
 - **Richer specifications**: reach-while-stay, recurrence, and specifications given by automata.
 
 ## Performance

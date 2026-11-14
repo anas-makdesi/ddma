@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.0 (14 November 2026)
+
+**Safe envelopes from data, without a grid** (`ddma.invariance`; methods of Makdesi & Zamani and Makdesi, Zamani & Jafarpour, IFAC World Congress 2026)
+- `monotone_envelope`: controlled invariant set of a monotone system with an additive bounded disturbance and a lower-closed specification, as maximal corners of lower sets, each with its largest certified input. Layered search with dominance pruning and a sort-filter skyline; returns exactly the corners of exhaustive enumeration. `state_signs` / `input_signs` for systems that are monotone after flipping coordinates.
+- `embedding_envelope`: invariant boxes spanned by pairs of data points, for any system with interval bounds on its Jacobian (states and inputs) and an additive bounded disturbance. The pair LP (maximum over the box of the minimum of two growth cones) is solved exactly in closed form (`max_min_cones`), all pairs in vectorized blocks.
+- Envelopes answer `contains(x)` and `safe_input(x, u_desired)` (the certified input closest to the desired one).
+- Examples: `envelope_room_cooling.py` (1,000 transitions certify about 98 % of the safe temperature range; the grid abstraction certifies about 74 % from 200,000) and `envelope_nonlinear.py` (two-species competition model, ring of ten coupled units). Figures in `docs/figures/`, notes in `docs/INVARIANCE.md`.
+- MATLAB: `ddma.monotone_envelope`, `ddma.embedding_envelope`, `ddma.envelope_contains`, `ddma.envelope_input`, `ddma.maximal_points`, `ddma.max_min_cones`, examples of the same names; tested against Python (`matlab/tests/run_invariance_tests.m`).
+- Authors: Majid Zamani and Saber Jafarpour added as co-authors of these methods (README, `CITATION.cff`, `pyproject.toml`).
+
 ## 0.8.0 (14 November 2026)
 
 **Safety filter for reinforcement learning**

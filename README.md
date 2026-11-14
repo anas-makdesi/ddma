@@ -6,7 +6,7 @@
 
 > A. Makdesi, A. Girard, L. Fribourg. *Data-Driven Models of Monotone Systems.* IEEE Transactions on Automatic Control, 69, pp. 5294–5309, 2024. [doi:10.1109/TAC.2023.3346793](https://doi.org/10.1109/TAC.2023.3346793)
 
-and models of systems that are **not monotone but have bounded derivatives** (TAC 2024, Section III-C, and the five approaches of the PhD thesis, Chapter 3), with the symbolic abstractions and controller synthesis built on top of them (L4DC 2021, ADHS 2021). More model classes are planned (see the roadmap).
+and models of systems that are **not monotone but have bounded derivatives** (TAC 2024, Section III-C, and the five approaches of the PhD thesis, Chapter 3), with the symbolic abstractions and controller synthesis built on top of them (L4DC 2021, ADHS 2021), and **safe envelopes computed straight from data, without a grid** (IFAC World Congress 2026). More model classes are planned (see the roadmap).
 
 **Python and MATLAB.** Both interfaces share one C++ core, they are tested against each other, and the experiments of the three papers and of the thesis chapter are reproduced (see [docs/REPRODUCTION.md](docs/REPRODUCTION.md)). Every feature is in both languages, and the MATLAB results are checked against Python's in CI: see [docs/PARITY.md](docs/PARITY.md) for the name of each function in each language.
 
@@ -104,6 +104,26 @@ On the cruise-control task (`ddma.rl.CruiseControlEnv`: drive close to 22 m/s be
 ![Constraint violations during training, with and without the safety filter](docs/figures/rl_safety_filter.png)
 
 (`python examples/rl_safety_filter.py`, needs `pip install "ddma[rl-demo]"`; MATLAB: `run examples/rl_safety_filter`.)
+
+## Safe envelopes without a grid
+
+`ddma.invariance` computes a controlled invariant set directly from the transitions, with no partition and no abstraction: every state in the envelope can be kept in it forever, for every disturbance within the bounds, with the inputs the envelope certifies. Two methods:
+
+- `monotone_envelope` (monotone systems, lower-closed specifications such as "every temperature at most 26 °C"): the envelope is a union of lower sets, stored as a few corner points, each with the largest input that keeps everything below it there.
+- `embedding_envelope` (any system with bounds on its Jacobian): every pair of data points spans a box; the growth cones of the two points bound where the box can go (an LP, solved here exactly in closed form), and boxes that map into themselves are kept.
+
+```python
+from ddma import monotone_envelope
+env = monotone_envelope(X, X_next, U, w_lo=0, w_hi=0.15, input_signs=[-1], x_hi=[26, 26, 26])
+env.contains(x)                 # certified?
+u = env.safe_input(x, u_wanted) # closest certified input (None outside)
+```
+
+Three rooms cooled by one input, unknown heat gains up to 0.15 °C per step, limit 26 °C: from 1,000 transitions the envelope certifies about 98 % of the safe temperature range in under a second; the grid abstraction of `examples/lazy_synthesis.py` certifies about 74 % from 200,000 transitions. For non-monotone systems, 400 transitions of a two-species competition model certify about 84 % of its operating range, and a ring of ten coupled nonlinear units is handled from 1,000 transitions in a fraction of a second.
+
+![Certified safe temperatures: envelope from 1,000 transitions vs grid abstraction from 200,000](docs/figures/envelope_room_cooling.png)
+
+(`python examples/envelope_room_cooling.py`, `python examples/envelope_nonlinear.py`; MATLAB: `ddma.monotone_envelope`, `ddma.embedding_envelope`, examples of the same names. Details: [docs/INVARIANCE.md](docs/INVARIANCE.md).)
 
 ## Install
 
@@ -206,6 +226,7 @@ w.update(z_new[None], [y_new])   # one measurement at a time: about 0.1 ms on th
 | sign patterns (`signs=`) | known increasing (+1) / decreasing (−1) / no (0) dependence per output and input | ±1: order transformation for unknown linear functions (thesis Ch. 2); 0: extension in this package |
 | `SymbolicAbstraction` | finite abstraction of x⁺ ∈ f(x,u) + g(x,u) + D; successors stored as boxes of cells; `features=` for unknown parts that depend on a subset of (x, u) | L4DC 2021, ADHS 2021, TAC paper |
 | `ddma.rl.SafetyFilterWrapper`, `CruiseControlEnv` | certified safety filter around any Gymnasium environment (actions corrected to the nearest safe one; initial states redrawn into the controller's domain; optional penalty per correction); a cruise-control RL benchmark | |
+| `ddma.invariance`: `monotone_envelope`, `embedding_envelope` | safe envelopes (controlled invariant sets) from data without a grid: maximal corners of lower sets for monotone systems (layered search with dominance pruning + sort-filter skyline, equal to exhaustive enumeration); invariant boxes spanned by pairs of data points for systems with bounded Jacobians (the pair LP solved exactly in closed form); `contains`, `safe_input` | IFAC WC 2026 (Makdesi & Zamani; Makdesi, Zamani & Jafarpour) |
 | `safety`, `reach_avoid` | maximal controlled invariant set; reach-avoid with step counts. Exact fixed points in the C++ core: summed-area tables check a successor box in O(2^n); in `safety` each state keeps a pointer to its first input not yet ruled out, so every state–input pair is examined at most once over the whole fixed point; `reach_avoid` re-examines a state only when its successor hull gained a winning cell | standard fixed points |
 | `SymbolicAbstraction(..., lazy=True)` | no transitions stored: `safety` evaluates a transition only when its scan reaches it (states outside the safe set are never expanded, each state stops at its first good input). Memory O(\|Q\|) instead of O(\|Q\|·\|P\|); the controller computes its allowed inputs on demand. Same winning set | standard fixed point, transitions computed on demand |
 | `Controller` | concrete inputs (`pick=`), **safety filter** (`filter`), closed-loop `simulate` | |
@@ -238,22 +259,24 @@ The Python tests are in `tests/` and run in about 10 s with `pytest`. They check
 - **Bounded-derivative models**: all five approaches are sound for random functions with bounded derivatives, with data outside the box and a known part g. The growth-cone vertex values equal the set-membership bounds computed by brute force over all data, and the cell bounds equal their definition; restricted to two sign matrices, the all-matrix model equals the two-matrix one; `update` equals a refit on all data; the windowed update tightens exactly the window. The linear-programming final steps are certified by weak duality, so solver tolerances cannot make them unsound.
 - **Original implementation**: the grid algorithm reproduces the original MATLAB implementation (`Data2Sigma0` + `ApproximationMonotoneSystemData3`) bit for bit on random problems.
 - **Backends and languages**: the C++ and NumPy backends are bit-identical. The MATLAB code, both pure `.m` and MEX, reproduces the Python results exactly (map, abstraction, safety, reach-avoid; the five bounded-derivative models to within 1e-15, and their online updates), and the MEX fixed points equal the `.m` ones on random 1-D to 3-D abstractions. It has been run in MATLAB (MATLAB Online: tests, examples and figures) and CI runs it under Octave.
+- **Safe envelopes**: the monotone search equals brute-force enumeration; the closed-form pair bound equals an LP solver; every certified corner or box is pushed through the true dynamics with random inputs and worst-case disturbances, and closed loops from thousands of certified states never leave the envelope (Python and MATLAB, MATLAB checked against Python).
 - **Closed loop**: simulated trajectories under the synthesized controllers and the safety filter never leave the safe set and always reach the target.
 
 ## Roadmap
 
-Next: partition optimisation, controlled invariance via monotone embeddings, documentation site and pre-built wheels. See [docs/ROADMAP.md](docs/ROADMAP.md).
+Next: faster learning kernels (multithreading), documentation site and pre-built wheels. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Authors
 
 - **Anas Makdesi**: implementation and maintenance.
 - **Antoine Girard** (Université Paris-Saclay, CNRS, CentraleSupélec, L2S) and **Laurent Fribourg** (Université Paris-Saclay, CNRS, ENS Paris-Saclay, LMF): co-authors of the methods implemented here (L4DC 2021, ADHS 2021, TAC 2024) and supervisors of the PhD thesis.
+- **Majid Zamani** (University of Colorado Boulder; LMU Munich) and **Saber Jafarpour** (University of Colorado Boulder): co-authors of the safe-envelope methods (`ddma.invariance`, IFAC World Congress 2026).
 
-The methods come from the papers above. This package was rewritten from the original MATLAB research code with the help of Claude (Anthropic): the Python package, the C++ core, the tests and the reproductions of the papers' experiments.
+The methods come from the papers above. This package was rewritten from the original MATLAB research code with the help of Claude (Anthropic): the Python package, the C++ core, the MATLAB interface, the tests and the reproductions of the papers' experiments.
 
 ## Citing
 
-If you use this software, please cite the TAC paper (see `CITATION.cff`), and for the bounded-derivative models also the thesis:
+If you use this software, please cite the TAC paper (see `CITATION.cff`), for the bounded-derivative models also the thesis, and for the safe envelopes the IFAC 2026 papers (Makdesi & Zamani, *Data-driven synthesis of controlled invariant sets for monotone systems*; Makdesi, Zamani & Jafarpour, *Data-driven controlled invariance via monotone embeddings*):
 
 ```bibtex
 @article{makdesi2024datadriven,

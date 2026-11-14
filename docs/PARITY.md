@@ -46,6 +46,18 @@ The data of `bd_fit` are `Z = [X U]` and `Y = X' - g(X, U)`, as for `ddma.fit` (
 | `ddma.rl.SafetyFilterWrapper(env, controller, state_fn=, penalty=, reset_in_domain=)` (Gymnasium) | `ddma.safe_step(step, A, allowed, state_fcn, penalty)`, `ddma.safe_reset(reset, A, allowed, state_fcn)` (step/reset functions in the form of the RL Toolbox's `rlFunctionEnv`) | same safe actions (300 random states) |
 | `ddma.rl.CruiseControlEnv` | `matlab/examples/cruise_control_env.m` | same dynamics and reward |
 
+## Safe envelopes (no grid)
+
+| Python | MATLAB | Tested against Python |
+|---|---|---|
+| `monotone_envelope(X, Xn, U, w_lo=, w_hi=, x_lo=, x_hi=, state_signs=, input_signs=, u_lo=, u_hi=)` | `ddma.monotone_envelope(X, Xn, U, opts)` (same option names in a struct) | same corners and (corner, input) pairs |
+| `embedding_envelope(X, Xn, U, jx_lo, jx_hi, ju_lo, ju_hi, w_lo=, w_hi=, x_lo=, x_hi=, pairs=)` | `ddma.embedding_envelope(X, Xn, U, jx_lo, jx_hi, ju_lo, ju_hi, opts)` (pairs 1-based) | same boxes, input boxes and pairs |
+| `env.contains(x)` | `ddma.envelope_contains(E, x)` | same on 2,000 states |
+| `env.safe_input(x, u_desired)` | `ddma.envelope_input(E, x, u_desired)` | same inputs |
+| `ddma.invariance.maximal_points`, `max_min_cones` | `ddma.maximal_points`, `ddma.max_min_cones` | equal |
+
+Tests: `matlab/tests/run_invariance_tests.m` (reference written by `matlab/tests/make_reference_invariance.py`).
+
 ## Partitions and plots
 
 | Python | MATLAB |
@@ -67,6 +79,8 @@ The data of `bd_fit` are `Z = [X U]` and `Y = X' - g(X, U)`, as for `ddma.fit` (
 | `pendulum_bounded_derivatives.py` | `pendulum_bounded_derivatives.m` (coarser grid) |
 | `lazy_synthesis.py` | `lazy_synthesis.m` |
 | `rl_safety_filter.py` (PPO with Stable-Baselines3) | `rl_safety_filter.m` (exploring agents; with the RL Toolbox, train any agent on `rlFunctionEnv(..., safeStep, safeReset)`) |
+| `envelope_room_cooling.py` | `envelope_room_cooling.m` |
+| `envelope_nonlinear.py` | `envelope_nonlinear.m` |
 | — | `online_refinement.m` |
 
 The examples use random data, so the two languages draw different samples and print slightly different numbers; on the same data the results are equal (tested).

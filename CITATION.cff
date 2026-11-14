@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite the article below."
 title: "ddma: data-driven models and abstractions"
-version: 0.8.0
+version: 0.9.0
 license: MIT
 authors:
   - family-names: Makdesi
@@ -12,6 +12,12 @@ authors:
   - family-names: Fribourg
     given-names: Laurent
     affiliation: "Université Paris-Saclay, CNRS, ENS Paris-Saclay, Laboratoire Méthodes Formelles"
+  - family-names: Zamani
+    given-names: Majid
+    affiliation: "University of Colorado Boulder; LMU Munich"
+  - family-names: Jafarpour
+    given-names: Saber
+    affiliation: "University of Colorado Boulder"
 preferred-citation:
   type: article
   title: "Data-Driven Models of Monotone Systems"
