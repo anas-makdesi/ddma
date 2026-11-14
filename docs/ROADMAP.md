@@ -7,6 +7,7 @@ Planned work, roughly in order. Contributions and suggestions are welcome throug
 - **Online refinement and safe learning-based MPC**: refine the model and the safety controller while the system runs, as data arrive (compatible-models approach).
 
 ## Methods
+- **More models for systems with bounded derivatives**: growth-cone models evaluated on the cell vertices, transformations with all sign combinations of the derivative bounds, and local updates when new data arrive.
 - **Partition optimisation**: choose the cut points of the rectangular partition to minimise the over-approximation for a given number of cells (CCTA 2025).
 - **Controlled invariance via monotone embeddings**: data-driven controlled invariant sets for systems that are not monotone.
 - **Richer specifications**: reach-while-stay, recurrence, and specifications given by automata.

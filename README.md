@@ -1,4 +1,4 @@
-# ddma: data-driven abstractions of monotone systems
+# ddma: data-driven models and abstractions
 
 **Learn a guaranteed model of an unknown system from data, then synthesize controllers that are provably safe for the real system.**
 
@@ -6,7 +6,7 @@
 
 > A. Makdesi, A. Girard, L. Fribourg. *Data-Driven Models of Monotone Systems.* IEEE Transactions on Automatic Control, 69, pp. 5294–5309, 2024. [doi:10.1109/TAC.2023.3346793](https://doi.org/10.1109/TAC.2023.3346793)
 
-It also provides the symbolic abstractions and controller synthesis built on top of them (L4DC 2021, ADHS 2021).
+It also provides models for systems with bounded derivatives (TAC 2024, Section III-C), and the symbolic abstractions and controller synthesis built on top of them (L4DC 2021, ADHS 2021). More model classes are planned (see the roadmap).
 
 **Python and MATLAB.** Both interfaces share one C++ core, they are tested against each other, and the experiments of all three papers are reproduced (see [docs/REPRODUCTION.md](docs/REPRODUCTION.md)).
 

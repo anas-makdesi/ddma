@@ -1,4 +1,4 @@
-"""ddma: data-driven abstractions of monotone systems.
+"""ddma: data-driven models and abstractions.
 
 Implements the minimal simulating maps of
 
