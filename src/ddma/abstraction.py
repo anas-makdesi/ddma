@@ -197,6 +197,49 @@ class SymbolicAbstraction:
             first[ok], last[ok] = f_, l_
         return ok, first, last
 
+    def refresh(self, states=None) -> np.ndarray:
+        """Recompute the transitions of some state cells after the model was refined.
+
+        ``states``: flat indices or boolean mask of the state cells to recompute. By
+        default, the cells changed by the model's last ``update_local`` calls (its
+        ``changed_boxes``, which are then cleared): a state cell is recomputed when its
+        coordinates lie in a changed box (for all inputs). A lazy abstraction stores no
+        transitions, so only the mask is returned. Returns the boolean mask of the
+        recomputed states. After a refinement the successor boxes only shrink, so the
+        previous winning set stays controlled invariant: pass it to
+        :func:`ddma.safety` as ``known_winning`` for an exact, cheaper update.
+        """
+        n = self.X.ndim
+        mask = np.zeros(self.n_states, dtype=bool)
+        if states is None:
+            boxes = getattr(self.sim_map, "changed_boxes", [])
+            for feats, first, last in boxes:
+                ok = np.ones(self.n_states, dtype=bool)
+                for k, j in enumerate(feats):
+                    if j < n:
+                        ok &= (self._q_all[:, j] >= first[k]) & (self._q_all[:, j] <= last[k])
+                mask |= ok
+            if hasattr(self.sim_map, "changed_boxes"):
+                self.sim_map.changed_boxes = []
+        else:
+            st = np.asarray(states)
+            if st.dtype == bool:
+                mask = st.ravel().copy()
+            else:
+                mask[st.ravel()] = True
+        if self.lazy or not mask.any():
+            return mask
+        npi = self.n_inputs
+        qs_all = np.flatnonzero(mask)
+        rows_per_q = max(1, 1_000_000 // npi)
+        for s in range(0, qs_all.size, rows_per_q):
+            qs = qs_all[s : s + rows_per_q]
+            ok, first, last = self.pair_boxes(np.repeat(qs, npi), np.tile(np.arange(npi), qs.size))
+            self.enabled[qs] = ok.reshape(qs.size, npi)
+            self.first[qs] = first.reshape(qs.size, npi, n)
+            self.last[qs] = last.reshape(qs.size, npi, n)
+        return mask
+
     @property
     def n_states(self) -> int:
         return self.X.n_cells

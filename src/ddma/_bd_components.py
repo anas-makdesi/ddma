@@ -137,9 +137,19 @@ class SignMatrixComponent:
 
 
 class GrowthComponent:
-    """Approaches 4 ("box") and 5 ("lp"): growth cones evaluated at the grid vertices."""
+    """Approaches 4 ("box") and 5 ("lp"): growth cones evaluated at the grid vertices.
 
-    def __init__(self, partition, g_lo, g_hi, d_lo, d_hi, final="box"):
+    ``local`` (optional) intersects the result with a map built directly from the cones
+    of some data points, evaluated on each cell (max of the cone over the cell's
+    vertices): ``"cell"`` uses the points inside the cell, ``"slab"`` the points whose
+    coordinate lies in the cell's range on at least one axis. With ``"slab"`` the
+    bounds are at least as tight as min over all data of the max of the cone over the
+    cell's vertices (eqs. 3.10-3.11): a point outside the slabs is dominated by the
+    vertex values, because a vertex of the cell lies between it and the cell on every
+    axis. Cost per point: O(n) for "cell", O(sum_j |Q| / K_j) for "slab".
+    """
+
+    def __init__(self, partition, g_lo, g_hi, d_lo, d_hi, final="box", local=None):
         self.partition = partition
         self.g_lo, self.g_hi = _check_bounds(g_lo, g_hi)
         self.d_lo, self.d_hi = float(d_lo), float(d_hi)
@@ -150,6 +160,12 @@ class GrowthComponent:
         self.v_lower = np.full(vshape, -np.inf)
         self.lower = np.full(partition.shape, -np.inf)
         self.upper = np.full(partition.shape, np.inf)
+        if local not in (None, "cell", "slab"):
+            raise ValueError("local must be None, 'cell' or 'slab'")
+        self.local = local
+        if local is not None:
+            self.loc_upper = np.full(partition.shape, np.inf)
+            self.loc_lower = np.full(partition.shape, -np.inf)
         n = partition.ndim
         self._corners = np.array(list(itertools.product((0, 1), repeat=n)), np.intp)
 
@@ -164,6 +180,70 @@ class GrowthComponent:
         for j, e in enumerate(self.partition.edges):
             idx[:, j] = np.clip(self.partition.search(j, Z[:, j], "right") - 1, 0, e.size - 2)
         return idx
+
+    def _axis_terms(self, z, j, first, last):
+        """Max / min over the two edges of each cell first..last on axis j of the cone
+        terms phi_hi_j(e - z), phi_lo_j(e - z), for points z (N,). Returns (N, cells)."""
+        e = self.partition.edges[j][first : last + 2]
+        t = e[None, :] - z[:, None]
+        gl, gh = self.g_lo[j], self.g_hi[j]
+        ph = np.maximum(gh * t, gl * t)
+        pl = np.minimum(gh * t, gl * t)
+        return np.maximum(ph[:, :-1], ph[:, 1:]), np.minimum(pl[:, :-1], pl[:, 1:])
+
+    def _local_update(self, Z, y, block=None):
+        """Min/max-scatter the per-cell cone bounds of the points into loc_upper/lower."""
+        P = self.partition
+        n = P.ndim
+        K = np.array(P.shape)
+        first, last = (np.zeros(n, np.intp), K - 1) if block is None else block
+        cshape = tuple(int(b - a + 1) for a, b in zip(first, last))
+        sl = tuple(slice(first[j], last[j] + 1) for j in range(n))
+        lu, ll = self.loc_upper[sl], self.loc_lower[sl]  # views
+        cells = self._cells(Z) - first  # cell index relative to the block
+        inside = np.all((cells >= 0) & (cells < np.array(cshape)), axis=1)
+        Z, y, cells = Z[inside], y[inside], cells[inside]
+        if Z.shape[0] == 0:
+            return
+        terms = [self._axis_terms(Z[:, j], j, first[j], last[j]) for j in range(n)]
+        base_u = y + self.theta
+        base_l = y - self.theta
+        if self.local == "cell":
+            tu = base_u + sum(terms[j][0][np.arange(len(y)), cells[:, j]] for j in range(n))
+            tl = base_l + sum(terms[j][1][np.arange(len(y)), cells[:, j]] for j in range(n))
+            flat = np.ravel_multi_index(tuple(cells.T), cshape)
+            fu, fl = lu.reshape(-1).copy(), ll.reshape(-1).copy()
+            np.minimum.at(fu, flat, tu)
+            np.maximum.at(fl, flat, tl)
+            lu[...] = fu.reshape(cshape)
+            ll[...] = fl.reshape(cshape)
+            return
+        # slabs: for axis j, all cells of the block with index_j = cell_j of the point
+        other = int(np.prod(cshape))
+        chunk = max(1, 5_000_000 // max(1, other))
+        for j in range(n):
+            for s0 in range(0, len(y), chunk):
+                r = slice(s0, s0 + chunk)
+                N = len(y[r])
+                ix = np.arange(N)
+                vu = (base_u[r] + terms[j][0][r][ix, cells[r, j]])
+                vl = (base_l[r] + terms[j][1][r][ix, cells[r, j]])
+                shp_u, shp_l = vu.reshape(N, *([1] * n)), vl.reshape(N, *([1] * n))
+                for i in range(n):
+                    if i == j:
+                        continue
+                    sh = [N] + [1] * n
+                    sh[1 + i] = cshape[i]
+                    shp_u = shp_u + terms[i][0][r].reshape(sh)
+                    shp_l = shp_l + terms[i][1][r].reshape(sh)
+                # shp_*: (N, ..., 1 on axis j, ...); reduce per slab index along axis j
+                for c in np.unique(cells[r, j]):
+                    m = cells[r, j] == c
+                    idx = [slice(None)] * n
+                    idx[j] = slice(int(c), int(c) + 1)
+                    idx = tuple(idx)
+                    np.minimum(lu[idx], shp_u[m].min(axis=0), out=lu[idx])
+                    np.maximum(ll[idx], shp_l[m].max(axis=0), out=ll[idx])
 
     # -------------------------------------------------------------- full fit
     def vertex_values(self, Z, y):
@@ -209,6 +289,9 @@ class GrowthComponent:
         lo, up = self.vertex_values(Z, y)
         np.minimum(self.v_upper, up, out=self.v_upper)
         np.maximum(self.v_lower, lo, out=self.v_lower)
+        if self.local is not None:
+            self._local_update(np.atleast_2d(np.asarray(Z, float)),
+                               np.asarray(y, float).ravel())
         self._finalize()
 
     # -------------------------------------------------------------- final step
@@ -261,6 +344,9 @@ class GrowthComponent:
             upper = max_min_affine(ou, su, lo_c, hi_c, upper.ravel()).reshape(cshape)
             lower = -max_min_affine(-ol, -sl_, lo_c, hi_c, -lower.ravel()).reshape(cshape)
         sl = tuple(slice(first[j], last[j] + 1) for j in range(n))
+        if self.local is not None:
+            upper = np.minimum(upper, self.loc_upper[sl])
+            lower = np.maximum(lower, self.loc_lower[sl])
         self.upper[sl] = upper
         self.lower[sl] = lower
 
@@ -277,13 +363,18 @@ class GrowthComponent:
         w = np.broadcast_to(np.asarray(window, np.intp), (n,))
         K = np.array(P.shape)
         cells = self._cells(Z)
+        changed = []
         for z, yk, c in zip(Z, y, cells):
             first = np.maximum(c - w, 0)
             last = np.minimum(c + w, K - 1)
+            changed.append((first, last))
             axes = [P.edges[j][first[j] : last[j] + 2] for j in range(n)]
             V = np.stack(np.meshgrid(*axes, indexing="ij"), axis=-1)
             plo, phi = self._phi(V - z)
             sl = tuple(slice(first[j], last[j] + 2) for j in range(n))
             np.minimum(self.v_upper[sl], yk + self.theta + phi, out=self.v_upper[sl])
             np.maximum(self.v_lower[sl], yk - self.theta + plo, out=self.v_lower[sl])
+            if self.local is not None:
+                self._local_update(z[None], np.array([yk]), (first, last))
             self._finalize((first, last))
+        return changed

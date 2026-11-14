@@ -308,3 +308,138 @@ def test_model_errors():
                                          method="all_matrix")
     with pytest.raises(ValueError):
         M.update_local(X, U, X, window=1)
+
+
+# ---------------------------------------------------------------------------- local map (Prop. 7)
+def eq11_bounds(P, Z, y, glo, ghi, theta):
+    """min over data of the max of the cone over each cell's vertices (and the lower bound)."""
+    up = np.full(P.shape, np.inf)
+    lo = np.full(P.shape, -np.inf)
+    for q in itertools.product(*map(range, P.shape)):
+        a, b = P.cell_bounds(np.array([q]))
+        V = np.array(list(itertools.product(*zip(a[0], b[0]))))
+        dz = V[:, None, :] - Z[None]
+        up[q] = (y + theta + np.maximum(ghi * dz, glo * dz).sum(-1)).max(0).min()
+        lo[q] = (y - theta + np.minimum(ghi * dz, glo * dz).sum(-1)).min(0).max()
+    return lo, up
+
+
+@pytest.mark.parametrize("n", [2, 3])
+@pytest.mark.parametrize("final", ["box", "lp"])
+def test_local_slab_never_looser_than_eq11(n, final):
+    rng = np.random.default_rng(30 + n)
+    for _ in range(6):
+        f, glo, ghi = make_function(rng, n)
+        Z, y = data(rng, f, n, int(rng.integers(3, 40)))
+        P = RectangularPartition.uniform([-2] * n, [2] * n, [int(rng.integers(2, 6))] * n)
+        lo11, up11 = eq11_bounds(P, Z, y, glo, ghi, 0.2)
+        plain = GrowthComponent(P, glo, ghi, -0.1, 0.1, final=final)
+        cell = GrowthComponent(P, glo, ghi, -0.1, 0.1, final=final, local="cell")
+        slab = GrowthComponent(P, glo, ghi, -0.1, 0.1, final=final, local="slab")
+        for c in (plain, cell, slab):
+            c.update(Z, y)
+            check_sound(c, f, rng, n_test=3000)
+        tol = 1e-9 if final == "box" else 1e-6
+        assert np.all(slab.upper <= up11 + tol) and np.all(slab.lower >= lo11 - tol)
+        e = 1e-12
+        assert np.all(slab.upper <= cell.upper + e) and np.all(cell.upper <= plain.upper + e)
+        assert np.all(slab.lower >= cell.lower - e) and np.all(cell.lower >= plain.lower - e)
+
+
+def test_prop7_counterexample_cell_local():
+    """The cell-local intersection alone can be looser than eq. (11) (thesis/draft
+    Prop. 7 as first stated); the slab version is not."""
+    P = RectangularPartition.uniform([0, 0], [2, 2], [2, 2])
+    Z, y = np.array([[0.375, 1.375]]), np.array([-0.75])
+    g = np.ones(2)
+    cell = GrowthComponent(P, -g, g, 0, 0, final="lp", local="cell")
+    slab = GrowthComponent(P, -g, g, 0, 0, final="lp", local="slab")
+    cell.update(Z, y)
+    slab.update(Z, y)
+    assert cell.upper[0, 0] == pytest.approx(1.625, abs=1e-6)
+    assert slab.upper[0, 0] == pytest.approx(1.25, abs=1e-9)
+
+
+@pytest.mark.parametrize("local", ["cell", "slab"])
+def test_local_map_with_windowed_update(local):
+    rng = np.random.default_rng(33)
+    f, glo, ghi = make_function(rng, 2)
+    Z, y = data(rng, f, 2, 300)
+    P = RectangularPartition.uniform([-2, -2], [2, 2], [8, 8])
+    a = GrowthComponent(P, glo, ghi, -0.1, 0.1, local=local)
+    a.update(Z[:200], y[:200])
+    a.update_local(Z[200:], y[200:], window=1)
+    check_sound(a, f, rng)
+    b = GrowthComponent(P, glo, ghi, -0.1, 0.1, local=local)
+    b.update(Z[:200], y[:200])
+    b.update_local(Z[200:], y[200:], window=10)  # covers the grid: same as update
+    full = GrowthComponent(P, glo, ghi, -0.1, 0.1, local=local)
+    full.update(Z, y)
+    np.testing.assert_allclose(b.upper, full.upper, atol=1e-12, rtol=0)
+    np.testing.assert_allclose(b.lower, full.lower, atol=1e-12, rtol=0)
+
+
+# ---------------------------------------------------------------------------- online loop
+def online_setup(lazy=False, local=None):
+    rng = np.random.default_rng(40)
+    step = lambda X, U: np.stack([X[:, 0] + 0.1 * X[:, 1],  # noqa: E731
+                                  X[:, 1] + 0.1 * (2 * np.sin(X[:, 0]) + U[:, 0])], 1)
+    Px = RectangularPartition.uniform([-1, -1], [1, 1], [24, 24])
+    Pu = RectangularPartition.uniform([-2], [2], [5])
+    P = RectangularPartition.product(Px, Pu)
+    A_lo = np.array([[1, 0.1], [0.2 * np.cos(1), 1]])
+    A_hi = np.array([[1, 0.1], [0.2, 1]])
+    B = np.array([[0.0], [0.1]])
+    X = rng.uniform(-1, 1, (300, 2))
+    U = rng.uniform(-2, 2, (300, 1))
+    M = BoundedDerivativeModel.from_data(X, U, step(X, U), P, A_lo, A_hi, B, B,
+                                         method="growth", local=local)
+    abst = SymbolicAbstraction(Px, Pu, M, lazy=lazy)
+    return rng, step, Px, Pu, P, M, abst
+
+
+@pytest.mark.parametrize("backend", ["cpp", "numpy", "lazy"])
+def test_incremental_safety_equals_recomputation(backend):
+    lazy = backend == "lazy"
+    rng, step, Px, Pu, P, M, abst = online_setup(lazy=lazy)
+    be = "numpy" if lazy else backend
+    if be == "cpp" and not ddma.compiled_backend_available():
+        pytest.skip("compiled kernel not installed")
+    safe = np.ones(Px.n_cells, bool)
+    old = ddma.safety(abst, safe, backend=be).domain
+    for _ in range(5):  # online: a few new points, local update, refresh, incremental safety
+        X = rng.uniform(-1, 1, (20, 2))
+        U = rng.uniform(-2, 2, (20, 1))
+        M.update_local(X, U, step(X, U), window=3)
+        changed = abst.refresh()
+        assert changed.any() and not M.changed_boxes
+        new = ddma.safety(abst, safe, backend=be, known_winning=old).domain
+        ref_abst = SymbolicAbstraction(Px, Pu, M, lazy=lazy)
+        ref = ddma.safety(ref_abst, safe, backend=be).domain
+        np.testing.assert_array_equal(new, ref)
+        assert np.all(new[old])  # the winning set only grows
+        old = new
+    assert old.sum() > 0
+
+
+def test_refresh_equals_rebuild():
+    rng, step, Px, Pu, P, M, abst = online_setup(local="slab")
+    X = rng.uniform(-1, 1, (10, 2))
+    U = rng.uniform(-2, 2, (10, 1))
+    M.update_local(X, U, step(X, U), window=2)
+    mask = abst.refresh()
+    assert 0 < mask.sum() < Px.n_cells
+    ref = SymbolicAbstraction(Px, Pu, M)
+    np.testing.assert_array_equal(abst.enabled, ref.enabled)
+    np.testing.assert_array_equal(abst.first[abst.enabled], ref.first[ref.enabled])
+    np.testing.assert_array_equal(abst.last[abst.enabled], ref.last[ref.enabled])
+
+
+def test_known_winning_is_checked():
+    rng, step, Px, Pu, P, M, abst = online_setup()
+    safe = np.ones(Px.n_cells, bool)
+    bad = ~ddma.safety(abst, safe).domain  # losing cells are not controlled invariant
+    with pytest.raises(ValueError):
+        ddma.safety(abst, safe, known_winning=bad)
+    with pytest.raises(ValueError):
+        ddma.safety(abst, np.zeros(Px.n_cells, bool), known_winning=safe)

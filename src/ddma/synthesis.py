@@ -161,6 +161,8 @@ def safety(
     safe: np.ndarray,
     max_iter: int = 100_000,
     backend: str = "auto",
+    known_winning: Optional[np.ndarray] = None,
+    check: bool = True,
 ) -> Controller:
     """Maximal controlled invariant subset of ``safe`` (flat boolean mask over state cells).
 
@@ -178,22 +180,49 @@ def safety(
     ``safe`` are never expanded and each state stops at its first good input. Memory is
     O(|Q|) instead of O(|Q| |P|); the controller computes its allowed inputs on demand.
     Same result.
+
+    ``known_winning``: incremental update. A set of cells known to be controlled
+    invariant inside ``safe``, typically the previous winning set after the model was
+    refined (refined successor boxes can only shrink, so the old winning set stays
+    controlled invariant and the new maximal set contains it). Every round of the
+    fixed point contains the maximal set, so these cells are never removed: they are
+    kept and not tested, and only the other cells are examined. The result is the
+    same maximal set. With ``check=True`` (default) the assumption is verified first,
+    in one cheap round, and a ValueError is raised if it does not hold. The saving is
+    modest with the pointer scan (known cells cost one check per round anyway; most of
+    the work is removing losing cells), about 10 % on the pendulum example; the main
+    use is the guarantee that the winning set only grows during online refinement.
     """
     safe = np.asarray(safe, dtype=bool).ravel()
     if safe.size != abs_.n_states:
         raise ValueError("safe must have one entry per state cell")
+    fixed = None
+    if known_winning is not None:
+        fixed = np.asarray(known_winning, dtype=bool).ravel()
+        if fixed.size != abs_.n_states:
+            raise ValueError("known_winning must have one entry per state cell")
+        if np.any(fixed & ~safe):
+            raise ValueError("known_winning must be a subset of safe")
+        if check and fixed.any():
+            inner = safety(abs_, fixed, max_iter=max_iter, backend=backend)
+            if not np.array_equal(inner.domain, fixed):
+                raise ValueError("known_winning is not controlled invariant for this abstraction")
+        if not fixed.any():
+            fixed = None
     if getattr(abs_, "lazy", False):
-        return _safety_lazy(abs_, safe, max_iter)
+        return _safety_lazy(abs_, safe, max_iter, fixed)
     if _use_cpp(backend):
-        W, allowed, _ = _core.safety(*_core_args(abs_), safe.view(np.uint8))
+        f8 = None if fixed is None else np.ascontiguousarray(fixed).view(np.uint8)
+        W, allowed, _ = _core.safety(*_core_args(abs_), safe.view(np.uint8), f8)
         return Controller(abs_, allowed.view(bool), W.view(bool))
     W = safe.copy()
+    active = W if fixed is None else None
     nq, npi = abs_.enabled.shape
     ptr = np.zeros(nq, dtype=np.int64)  # first input of each state not yet ruled out
     block = 16  # inputs scanned per state in one vectorized step
     for _ in range(max_iter):
         sat = _summed_area(abs_, W)
-        rows = np.flatnonzero(W)
+        rows = np.flatnonzero(W if active is not None else (W & ~fixed))
         # 1. check the current pointers
         r = rows[ptr[rows] < npi]
         ok = np.zeros(r.size, dtype=bool)
@@ -232,22 +261,23 @@ def safety(
     return Controller(abs_, allowed, W)
 
 
-def _safety_lazy(abs_, safe, max_iter):
+def _safety_lazy(abs_, safe, max_iter, fixed=None):
     """Pointer scan on a lazy abstraction: transitions evaluated on demand."""
     nq, npi, n = abs_.n_states, abs_.n_inputs, abs_.X.ndim
     W = safe.copy()
+    test = np.ones(nq, bool) if fixed is None else ~fixed  # cells that are examined
     ptr = np.zeros(nq, dtype=np.int64)  # current candidate input of each state
     wf = np.zeros((nq, n), dtype=np.intp)  # its successor box, when known
     wl = np.zeros((nq, n), dtype=np.intp)
     known = np.zeros(nq, dtype=bool)
     for _ in range(max_iter):
         sat = _summed_area(abs_, W)
-        rows = np.flatnonzero(W & known)
+        rows = np.flatnonzero(W & known & test)
         bad = _bad_in_boxes(sat, wf[rows], wl[rows]) != 0
         failed = rows[bad]
         ptr[failed] += 1
         known[failed] = False
-        todo = np.flatnonzero(W & ~known & (ptr < npi))
+        todo = np.flatnonzero(W & ~known & test & (ptr < npi))
         block = 1
         while todo.size:  # scan forward, evaluating 1, 2, 4, ... transitions per state
             P = ptr[todo][:, None] + np.arange(block)
@@ -271,7 +301,7 @@ def _safety_lazy(abs_, safe, max_iter):
             ptr[miss] = np.minimum(ptr[miss] + block, npi)
             todo = miss[ptr[miss] < npi]
             block = min(2 * block, 64)
-        dead = np.flatnonzero(W & (ptr >= npi))
+        dead = np.flatnonzero(W & test & (ptr >= npi))
         if dead.size == 0:
             break
         W[dead] = False

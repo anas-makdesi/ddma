@@ -162,11 +162,14 @@ inline void box_all_in(const PairBoxes<T>& a, const std::vector<std::ptrdiff_t>&
 
 // Maximal controlled invariant subset of safe. W (in/out): safe on entry, winning set on
 // exit. allowed (optional, strides of enabled): safe inputs at winning states.
+// fixed (optional): states known to be winning (a controlled invariant subset of safe);
+// they are kept in W and never tested, which gives the same result with less work.
 // Returns the number of rounds.
 template <class T>
 inline std::ptrdiff_t safety(const PairBoxes<T>& a, const std::vector<std::ptrdiff_t>& shape,
                              std::uint8_t* W, std::uint8_t* allowed,
-                             std::ptrdiff_t max_rounds = 100000) {
+                             std::ptrdiff_t max_rounds = 100000,
+                             const std::uint8_t* fixed = nullptr) {
   check_view(a, shape);
   SummedArea sat(shape);
   std::vector<std::ptrdiff_t> ptr(a.nq, 0), lo(a.n), hi(a.n), dead;
@@ -176,7 +179,7 @@ inline std::ptrdiff_t safety(const PairBoxes<T>& a, const std::vector<std::ptrdi
     sat.build([&](std::ptrdiff_t c) { return !W[c]; });
     dead.clear();
     for (std::ptrdiff_t q = 0; q < a.nq; ++q) {
-      if (!W[q]) continue;
+      if (!W[q] || (fixed && fixed[q])) continue;
       std::ptrdiff_t& p = ptr[q];
       for (; p < a.np; ++p) {
         if (!a.enabled[q * a.eq + p * a.ep]) continue;

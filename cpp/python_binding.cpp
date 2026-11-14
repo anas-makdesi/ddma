@@ -92,15 +92,24 @@ static py::array_t<std::uint8_t> box_all_in(py::array first, py::array last, arr
   return good;
 }
 
-static py::tuple safety(py::array first, py::array last, arru8 en, shape_t shape, arru8 safe) {
+static py::tuple safety(py::array first, py::array last, arru8 en, shape_t shape, arru8 safe,
+                        py::object fixed_obj) {
   py::array_t<std::uint8_t> W(safe.size()), allowed({en.shape(0), en.shape(1)});
+  arru8 fixed;
+  const std::uint8_t* fixed_ptr = nullptr;
+  if (!fixed_obj.is_none()) {
+    fixed = fixed_obj.cast<arru8>();
+    if (fixed.size() != safe.size()) throw std::invalid_argument("fixed must match safe");
+    fixed_ptr = fixed.data();
+  }
   std::copy(safe.data(), safe.data() + safe.size(), W.mutable_data());
   std::ptrdiff_t rounds = dispatch(first, last, [&](auto& fa, auto& la) {
     using T = typename std::remove_reference_t<decltype(fa)>::value_type;
     auto a = view<T>(fa, la, en);
     if (safe.size() != a.nq) throw std::invalid_argument("safe must have one entry per state");
     py::gil_scoped_release release;
-    return ddma::safety<T>(a, shape, W.mutable_data(), allowed.mutable_data());
+    return ddma::safety<T>(a, shape, W.mutable_data(), allowed.mutable_data(), 100000,
+                           fixed_ptr);
   });
   return py::make_tuple(W, allowed, rounds);
 }
@@ -128,6 +137,8 @@ PYBIND11_MODULE(_core, mod) {
           py::arg("Z"), py::arg("Y"), py::arg("edges"), py::arg("theta"), py::arg("signs"),
           py::arg("single") = false);
   mod.def("box_all_in", &box_all_in, "good[q, p]: p enabled at q, all successors in W");
-  mod.def("safety", &safety, "Maximal controlled invariant (W, allowed, rounds)");
+  mod.def("safety", &safety, "Maximal controlled invariant (W, allowed, rounds)",
+          py::arg("first"), py::arg("last"), py::arg("enabled"), py::arg("shape"),
+          py::arg("safe"), py::arg("fixed") = py::none());
   mod.def("reach_avoid", &reach_avoid, "Reach-avoid (R, value, allowed, rounds)");
 }

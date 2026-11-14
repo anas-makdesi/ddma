@@ -97,6 +97,7 @@ class BoundedDerivativeModel:
         self.backend, self.compact = backend, compact
         self.method = method
         self.components = components  # list of (features, component), one per output
+        self.changed_boxes = []  # cell boxes changed by update_local, for abstraction.refresh
         self._gm = affine_bounds(Am, Bm)
         self._gp = affine_bounds(Ap, Bp)
 
@@ -136,6 +137,7 @@ class BoundedDerivativeModel:
         features=None,
         compact: bool = False,
         method: str = "two_matrix",
+        local: Optional[str] = None,
     ) -> BoundedDerivativeModel:
         """Learn the model from transitions (x_k, u_k, x'_k).
 
@@ -144,7 +146,13 @@ class BoundedDerivativeModel:
         describe the known part; leave both None when g = 0. ``features``: see the class
         docstring. ``compact=True`` stores the bounds as float32, rounded outward
         ("two_matrix", "all_matrix", "lin_mono"). ``method``: see the class docstring.
+        ``local`` ("growth" / "lin_growth" only): also intersect with the cones of the data
+        points in each cell (``"cell"``) or in the cell's slabs (``"slab"``, tighter and
+        never looser than min over data of the cone's max over the cell); see
+        :class:`ddma._bd_components.GrowthComponent`.
         """
+        if local is not None and method not in ("growth", "lin_growth"):
+            raise ValueError("local is available for method='growth' or 'lin_growth'")
         if method not in METHODS:
             raise ValueError(f"method must be one of {METHODS}")
         X = np.atleast_2d(np.asarray(X, float))
@@ -182,7 +190,8 @@ class BoundedDerivativeModel:
                 P = partition.project(f)
                 gl, gh = g_lo_all[i, f], g_hi_all[i, f]
                 if method in ("growth", "lin_growth"):
-                    comp = GrowthComponent(P, gl, gh, d_lo[i], d_hi[i], final=final)
+                    comp = GrowthComponent(P, gl, gh, d_lo[i], d_hi[i], final=final,
+                                           local=local)
                 else:
                     comp = SignMatrixComponent(P, gl, gh, d_lo[i], d_hi[i], final=final,
                                                backend=backend, compact=compact)
@@ -245,7 +254,8 @@ class BoundedDerivativeModel:
         Z, Y = self._component_data(X, U, Xn)
         for i, (f, comp) in enumerate(self.components):
             w = window if np.ndim(window) == 0 else np.asarray(window)[f]
-            comp.update_local(Z[:, f], Y[:, i], w)
+            for first, last in comp.update_local(Z[:, f], Y[:, i], w):
+                self.changed_boxes.append((f, first, last))
         return self
 
     def f_bounds_at(self, joint_idx):
