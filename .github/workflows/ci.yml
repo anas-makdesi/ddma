@@ -19,6 +19,8 @@ jobs:
       - run: ruff check .
       - run: pytest -q
       - run: MPLBACKEND=Agg python examples/scalar_map.py && MPLBACKEND=Agg python examples/adaptive_cruise_control.py && python examples/lazy_synthesis.py 30
+      - name: gridless safe envelopes (examples)
+        run: MPLBACKEND=Agg python examples/envelope_room_cooling.py 300 && MPLBACKEND=Agg python examples/envelope_nonlinear.py
 
   matlab-octave:
     runs-on: ubuntu-latest
