@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=64", "pybind11>=2.10"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ddma"
+version = "0.3.0"
+description = "Data-driven abstractions of monotone systems: minimal simulating maps, symbolic abstractions and correct-by-construction controllers from data."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Anas Makdesi" }, { name = "Antoine Girard" }, { name = "Laurent Fribourg" }]
+keywords = ["control", "monotone systems", "data-driven control", "abstraction", "formal methods", "safety"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Topic :: Scientific/Engineering :: Mathematics",
+  "Intended Audience :: Science/Research",
+]
+dependencies = ["numpy>=1.22"]
+
+[project.optional-dependencies]
+examples = ["matplotlib>=3.5", "scipy>=1.9"]
+lp = ["scipy>=1.9"]
+dev = ["pytest>=7", "ruff>=0.4", "matplotlib>=3.5", "scipy>=1.9"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+src = ["src"]
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B"]

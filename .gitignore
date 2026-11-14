@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+.venv/
+.DS_Store
+src/ddma/*.so
+reproductions/results/*.npz
+matlab/*.mex
+matlab/*.mexa64
+matlab/*.mexmaci64
+matlab/*.mexmaca64
+matlab/*.mexw64
+matlab/*.o
