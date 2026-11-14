@@ -15,7 +15,6 @@ Planned work, roughly in order. Contributions and suggestions are welcome throug
 - Multithreaded learning kernel (OpenMP).
 - Streaming fit with constant memory for any number of samples.
 - Non-uniform and adaptive partitions that refine where the specification is decided.
-- Lazy abstractions in the MATLAB interface (Python has them since v0.3).
 
 ## Distribution
 - Documentation site with API reference and tutorial notebooks.

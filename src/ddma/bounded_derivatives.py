@@ -223,13 +223,19 @@ class BoundedDerivativeModel:
                 comp.update(Z[:, f], Y[:, i])
             return self
         Z, ym, yp = self._transformed(X, U, Xn)
+        # f- and f+ are non-decreasing in every coordinate; where both derivative bounds
+        # are zero they do not depend on it at all (sign 0: constant along that axis)
+        Gm = np.hstack([self.Am, self.Bm])
+        Gp = np.hstack([self.Ap, self.Bp])
         for k, (feats, outs, sm, sp) in enumerate(self.groups):
             P = self.partition.project(feats)
+            signs = np.where((Gm[np.ix_(outs, feats)] == 0) & (Gp[np.ix_(outs, feats)] == 0),
+                             0, 1).astype(np.int8)
             new_m = PartitionedSimulatingMap.from_data(
-                Z[:, feats], ym[:, outs], P, self.d_lo[outs], self.d_hi[outs],
+                Z[:, feats], ym[:, outs], P, self.d_lo[outs], self.d_hi[outs], signs=signs,
                 backend=self.backend, compact=self.compact)
             new_p = PartitionedSimulatingMap.from_data(
-                Z[:, feats], yp[:, outs], P, -self.d_hi[outs], -self.d_lo[outs],
+                Z[:, feats], yp[:, outs], P, -self.d_hi[outs], -self.d_lo[outs], signs=signs,
                 backend=self.backend, compact=self.compact)
             sm = new_m if sm is None else sm.intersect_(new_m)
             del new_m

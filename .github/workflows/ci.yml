@@ -27,4 +27,4 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends octave octave-dev
       - name: build MEX and run the MATLAB tests (against Python reference results)
         working-directory: matlab
-        run: octave --no-gui --eval "build_mex; addpath tests; run_tests; run examples/acc_safety_filter; run examples/pendulum_bounded_derivatives; run examples/online_refinement"
+        run: octave --no-gui --eval "build_mex; addpath tests; run_tests; run examples/acc_safety_filter; clear; run examples/pendulum_bounded_derivatives; clear; run examples/online_refinement; clear; run examples/scalar_map; clear; run examples/bounded_derivative_map; clear; K = 20; run examples/lazy_synthesis"

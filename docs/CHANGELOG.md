@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.7.0 (14 November 2026)
+
+**Python and MATLAB at parity.** Every feature is now in both interfaces, tested against each other; `docs/PARITY.md` maps each Python name to its MATLAB counterpart.
+
+New in MATLAB / Octave:
+- Lazy abstractions: `ddma.abstraction(..., lazy)`; `ddma.safety` runs the same on-demand pointer scan as Python (transitions evaluated only when needed; `allowed` is then a struct and `ddma.controller_input` computes the allowed inputs of a state on demand). Example `lazy_synthesis.m`.
+- `ddma.estimate_derivative_bounds`, `ddma.scenario_confidence` (TAC Sec. IV; LP with linprog or glpk).
+- Per-output `features` in `ddma.bd_fit` (each output learned on its own sub-grid; handled by `bd_update`, `bd_update_local`, `abstraction`, `abstraction_refresh`, `bounds`).
+- `ddma.growth_map`, `ddma.f_bounds`; `ddma.fit_update`, `ddma.intersect`, `ddma.compact` and `ddma.fit(..., compact)` (single, rounded outward), `ddma.contains`, `ddma.widths`, `ddma.bounded_fraction`, `ddma.is_empty`.
+- `ddma.msm_f_bounds`, `ddma.msm_estimate`, `ddma.msm_is_consistent`; `ddma.simulate`, `ddma.cells_meeting`, `ddma.transitions_to_data`, `ddma.data_partition`.
+- Examples `scalar_map.m`, `bounded_derivative_map.m`, `lazy_synthesis.m` (all Python examples now have a MATLAB version).
+- Internal helpers moved to `+ddma/+internal`.
+
+Python:
+- `BoundedDerivativeModel(method="two_matrix")`: a coordinate whose derivative bounds are both zero is treated as one the output does not depend on (sign 0) instead of as increasing. Tighter (cells beyond the data are now bounded too), still sound, and equal to the two-pattern construction and to MATLAB in that case. No change in the reproductions or the pendulum example; in `examples/bounded_derivative_map.py` approach 1 now bounds the whole interval.
+
 ## 0.6.0 (14 November 2026)
 
 - Growth-cone fits in the shared C++ core: the vertex values (scatter + one forward and one backward running min/max per axis) and the `local="cell"` / `"slab"` maps. The slab map is computed per "pattern" (left of / in / right of the point's cell on each axis) with one scatter and exclusive running min/max sweeps, so its cost no longer depends on the slab size. Same model as NumPy (within ~1e-15); 10 million points on a 50 x 50 grid: about 0.3 s, 0.6 s with `local="slab"` (NumPy: about 5 s, and the slab map did not fit in memory). `GrowthMap`, `GrowthComponent` and the growth methods of `BoundedDerivativeModel` take `backend="auto" | "cpp" | "numpy"`.

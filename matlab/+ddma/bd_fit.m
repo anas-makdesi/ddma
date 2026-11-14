@@ -1,4 +1,4 @@
-function S = bd_fit(Z, Y, edges, g_lo, g_hi, d_lo, d_hi, method, local, backend)
+function S = bd_fit(Z, Y, edges, g_lo, g_hi, d_lo, d_hi, method, local, backend, features)
 %BD_FIT Model of a map with bounded partial derivatives on a rectangular partition.
 %   S = ddma.bd_fit(Z, Y, edges, g_lo, g_hi, d_lo, d_hi, method) learns, for every cell
 %   and output i, an interval containing f_i(z) + d_i for all z in the cell, from data
@@ -22,6 +22,12 @@ function S = bd_fit(Z, Y, edges, g_lo, g_hi, d_lo, d_hi, method, local, backend)
 %   column-major order, d_lo, d_hi), so ddma.bounds and ddma.abstraction take it as is.
 %   As with ddma.fit, subtract a known part g from the data first and pass its bounds to
 %   ddma.abstraction.
+%   features (optional): cell array with, for each output i, the coordinates (1-based)
+%   that f_i depends on. Output i is then learned on that sub-grid only, which can save
+%   orders of magnitude of memory (e.g. Lorenz). Derivative bounds outside the listed
+%   coordinates are ignored: listing features asserts that f_i does not depend on the
+%   others. With features, S.lower and S.upper are empty; read bounds with ddma.bounds
+%   (or pass S to ddma.abstraction, which handles them).
 %   Online use: ddma.bd_update adds data exactly (same model as a refit on all data);
 %   ddma.bd_update_local (growth methods) updates a window of cells around each point;
 %   then ddma.abstraction_refresh and ddma.safety(..., known_winning).
@@ -31,6 +37,7 @@ if numel(edges) ~= n, error('ddma:bd_fit', 'one edge vector per input'); end
 if nargin < 8 || isempty(method), method = 'two_matrix'; end
 if nargin < 9, local = ''; end
 if nargin < 10 || isempty(backend), backend = 'auto'; end
+if nargin < 11, features = {}; end
 methods = {'two_matrix', 'all_matrix', 'lin_mono', 'growth', 'lin_growth'};
 if ~any(strcmp(method, methods)), error('ddma:bd_fit', 'unknown method %s', method); end
 if ~isempty(local) && ~any(strcmp(local, {'cell', 'slab'}))
@@ -53,11 +60,20 @@ end
 d_lo = d_lo(:)' .* ones(1, m); d_hi = d_hi(:)' .* ones(1, m);
 if any(d_lo > d_hi), error('ddma:bd_fit', 'need d_lo <= d_hi'); end
 
+if ~isempty(features)
+    if ~iscell(features) || numel(features) ~= m
+        error('ddma:bd_fit', 'features needs one coordinate list per output');
+    end
+end
+edges = edges(:)';
 shape = ddma.grid_shape(edges);
-N = prod(shape); NV = prod(shape + 1);
 raw = cell(1, m);
 for i = 1:m
-    R = struct('gl', g_lo(i, :), 'gh', g_hi(i, :), 'd_lo', d_lo(i), 'd_hi', d_hi(i));
+    if isempty(features), feat = 1:n; else, feat = sort(features{i}(:)'); end
+    sh = shape(feat); N = prod(sh); NV = prod(sh + 1);
+    R = struct('feat', feat, 'edges', {edges(feat)}, 'shape', sh, ...
+               'gl', g_lo(i, feat), 'gh', g_hi(i, feat), 'd_lo', d_lo(i), 'd_hi', d_hi(i), ...
+               'lo', -inf(N, 1), 'up', inf(N, 1));
     if isGrowth
         R.kind = 'growth';
         R.vlo = -inf(NV, 1); R.vup = inf(NV, 1);
@@ -71,10 +87,12 @@ for i = 1:m
     end
     raw{i} = R;
 end
-S = struct('edges', {edges}, 'shape', shape, 'lower', -inf(N, m), 'upper', inf(N, m), ...
+if isempty(features), L0 = -inf(prod(shape), m); else, L0 = []; end
+S = struct('edges', {edges}, 'shape', shape, 'lower', L0, 'upper', -L0, ...
            'd_lo', d_lo, 'd_hi', d_hi, 'method', method, 'local', local, ...
            'g_lo', g_lo, 'g_hi', g_hi, 'backend', backend, 'n_data', 0);
 S.raw = raw;
+S.features = features;
 S.changed = zeros(0, 2 * n);   % boxes of cells changed by bd_update_local: [first, last]
 S = ddma.bd_update(S, Z, Y);
 end

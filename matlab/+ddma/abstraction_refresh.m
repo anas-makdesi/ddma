@@ -9,8 +9,9 @@ function [A, S, mask] = abstraction_refresh(A, S, states)
 %   mask or 1-based indices), e.g. all of them after ddma.bd_update.
 %   After a refinement the successor boxes only shrink, so the previous winning set stays
 %   controlled invariant: pass it to ddma.safety as known_winning.
+%   A lazy abstraction stores no transitions: only its map is replaced by S.
 %   Same as the Python SymbolicAbstraction.refresh.
-nQ = size(A.enabled, 1);
+nQ = prod(A.shapeX);
 nx = numel(A.Xedges);
 if nargin < 3 || isempty(states)
     mask = false(nQ, 1);
@@ -34,5 +35,9 @@ elseif islogical(states)
 else
     mask = false(nQ, 1); mask(states) = true;
 end
-A = ddma.internal.abstraction_rows(A, S, find(mask));
+if isfield(A, 'lazy') && A.lazy
+    A.S = S;   % a lazy abstraction evaluates transitions from its map on demand
+else
+    A = ddma.internal.abstraction_rows(A, S, find(mask));
+end
 end

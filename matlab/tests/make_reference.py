@@ -9,13 +9,17 @@ from scipy.io import savemat
 
 from ddma import (
     BoundedDerivativeModel,
+    GrowthMap,
     MinimalSimulatingMap,
     PartitionedSimulatingMap,
     RectangularPartition,
     SymbolicAbstraction,
     affine_bounds,
+    estimate_derivative_bounds,
     reach_avoid,
     safety,
+    scenario_confidence,
+    simulate,
 )
 
 
@@ -190,6 +194,88 @@ online["last2"] = ab.last.reshape(Xp.shape + Up.shape + (2,))
 online["enabled2"] = ab.enabled.reshape(Xp.shape + Up.shape)
 online["dom2"] = safety(ab, safe, known_winning=dom1).domain_grid()
 out["online"] = online
+
+# parity (v0.7): lazy safety, derivative-bound estimation, per-output features, GrowthMap,
+# compact maps, map updates, minimal-map extras, partitions, cells_meeting, simulate
+par = {}
+p_ = out["pend"]
+Xpend, Upend, Xnpend = p_["X"], p_["U"], p_["Xn"]
+Xp = RectangularPartition.uniform([-1, -1.5], [1, 1.5], [20, 20])
+Up = RectangularPartition.uniform([-2], [2], 7)
+joint = RectangularPartition.product(Xp, Up)
+mdl = BoundedDerivativeModel.from_data(Xpend, Upend, Xnpend, joint, p_["A_lo"], p_["A_hi"],
+                                       p_["B_lo"], p_["B_hi"], d_lo=-0.005, d_hi=0.005,
+                                       method="growth", local="slab")
+lazy = SymbolicAbstraction(Xp, Up, mdl, lazy=True)
+safe = lazy.cells_inside([-0.8, -1.2], [0.8, 1.2])
+par["lazy_domain"] = safety(lazy, safe).domain_grid()
+# per-output features: theta+ depends on (theta, omega) only, omega+ on all
+feats = [[0, 1], [0, 1, 2]]
+mf = BoundedDerivativeModel.from_data(Xpend, Upend, Xnpend, joint, p_["A_lo"], p_["A_hi"],
+                                      p_["B_lo"], p_["B_hi"], d_lo=-0.005, d_hi=0.005,
+                                      method="all_matrix", features=feats)
+par["feat_lo0"], par["feat_hi0"] = mf.components[0][1].lower, mf.components[0][1].upper
+par["feat_lo1"], par["feat_hi1"] = mf.components[1][1].lower, mf.components[1][1].upper
+abf = SymbolicAbstraction(Xp, Up, mf)
+par["feat_domain"] = safety(abf, safe).domain_grid()
+# simulate: deterministic plant, centre inputs
+ctrl = safety(SymbolicAbstraction(Xp, Up, mdl), safe)
+
+
+def plant(x, u, rng=None):
+    x = np.asarray(x, float)
+    return np.array([x[0] + 0.1 * x[1], x[1] + 0.1 * (-np.sin(x[0]) - 0.2 * x[1] + u[0])])
+
+
+x0 = Xp.cell_centers(Xp.all_indices()[np.flatnonzero(ctrl.domain)[:1]])[0]
+xs, us = simulate(plant, ctrl, x0, 40, pick="center")
+par["sim_x0"], par["sim_xs"], par["sim_us"] = x0, xs, us
+par["meeting"] = lazy.cells_meeting([-0.2, -1.0], [0.0, 0.0]).reshape(Xp.shape)
+# derivative-bound estimation with fixed pairs (indices drawn as the Python function does)
+Kd = 4000
+Zd = rng.uniform(-1, 1, (Kd, 2))
+Yd = np.stack([np.sin(2 * Zd[:, 0]) + 0.5 * Zd[:, 1], Zd[:, 0] * Zd[:, 1]], 1)
+Yd = Yd + rng.uniform(-0.01, 0.01, Yd.shape)
+r1 = np.random.default_rng(11)
+a_lo, a_hi, w = estimate_derivative_bounds(Zd, Yd, 3000, 20000, rng=r1, w_weight=1.0)
+r2 = np.random.default_rng(11)
+pa1, pb1 = r2.integers(0, Kd, 3000), r2.integers(0, Kd, 3000)
+pa2, pb2 = r2.integers(0, Kd, 20000), r2.integers(0, Kd, 20000)
+par.update(est_Z=Zd, est_Y=Yd, est_a1=pa1 + 1.0, est_b1=pb1 + 1.0, est_a2=pa2 + 1.0,
+           est_b2=pb2 + 1.0, est_a_lo=a_lo, est_a_hi=a_hi, est_w=w,
+           conf=scenario_confidence(20000, 1e-6))
+# GrowthMap, compact maps, map update, minimal-map extras, data partition
+P2 = RectangularPartition.uniform([-1, -1], [1, 1], [9, 7])
+gm = GrowthMap.from_data(Zd[:500], Yd[:500, 0], P2, [-2, 0.5], [2, 0.5], -0.01, 0.01)
+zq = rng.uniform(-1, 1, (60, 2))
+par["gm_lo"], par["gm_hi"] = gm.bounds(zq)
+par["gm_flo"], par["gm_fhi"] = gm.f_bounds()
+par["gm_zq"], par["gm_edges"] = zq, cell(P2.edges)
+Ym = np.stack([Zd[:, 0] + 0.5 * Zd[:, 1] ** 3, np.tanh(Zd[:, 0])], 1)
+Ym = Ym + rng.uniform(-.02, .02, (Kd, 2))
+s1 = PartitionedSimulatingMap.from_data(Zd[:300], Ym[:300], P2, [-.02, -.02], [.02, .02])
+s2 = s1.update(Zd[300:900], Ym[300:900])
+sc = PartitionedSimulatingMap.from_data(Zd[:300], Ym[:300], P2, [-.02, -.02], [.02, .02],
+                                        compact=True)
+par.update(m_Z=Zd[:900], m_Y=Ym[:900], upd_lo=s2.lower, upd_hi=s2.upper,
+           cmp_lo=sc.lower.astype(np.float64), cmp_hi=sc.upper.astype(np.float64),
+           upd_bfrac=s2.bounded_fraction())
+msm = MinimalSimulatingMap(Zd[:200], Ym[:200], [-.02, -.02], [.02, .02])
+par["msm_est"] = msm.estimate(zq)
+par["msm_ok"] = msm.is_consistent()
+bad = MinimalSimulatingMap(Zd[:200], -Ym[:200], [-.02, -.02], [.02, .02])
+par["msm_bad_ok"] = bad.is_consistent()
+dp = RectangularPartition.from_data(Zd[:7], [-1, -1], [1, 1])
+par["dp_edges"] = cell(dp.edges)
+# approach 1 as BoundedDerivativeModel computes it (TAC Prop. 8), incl. a zero-bound input
+m2 = BoundedDerivativeModel.from_data(Xpend, Upend, Xnpend, joint, p_["A_lo"], p_["A_hi"],
+                                      p_["B_lo"], p_["B_hi"], d_lo=-0.005, d_hi=0.005)
+idx = joint.all_indices()
+clo, chi = joint.cell_bounds(idx)
+lo2, hi2 = m2.successor_bounds(idx, clo[:, :2], chi[:, :2], clo[:, 2:], chi[:, 2:])
+par["two_lo"] = lo2.reshape(joint.shape + (2,))
+par["two_hi"] = hi2.reshape(joint.shape + (2,))
+out["par"] = par
 print("online:", online["dom0"].mean(), dom1.mean(), online["dom2"].mean(),
       online["refreshed"].mean())
 

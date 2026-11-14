@@ -200,6 +200,91 @@ if numel(synth) > 1
     nfail = nfail + check(ok && (bad || ~any(safe & ~d)), 'safety with known_winning (matlab = mex = plain; checked)');
 end
 
+% 8. parity (v0.7) against Python
+if isfield(R, 'par')
+    q = R.par; p = R.pend;
+    Z = [p.X, p.U]; edges = [p.Xedges(:); p.Uedges(:)]';
+    glo = [p.A_lo, p.B_lo]; ghi = [p.A_hi, p.B_hi];
+    safe = ddma.cells_inside(p.Xedges, [-0.8, -1.2], [0.8, 1.2]);
+    % lazy abstraction: same winning set; allowed inputs on demand = eager rows
+    S = ddma.bd_fit(Z, p.Xn, edges, glo, ghi, -0.005, 0.005, 'growth', 'slab');
+    Al = ddma.abstraction(p.Xedges, p.Uedges, S, [], [], [], true);
+    [dl, al] = ddma.safety(Al, safe);
+    Ae = ddma.abstraction(p.Xedges, p.Uedges, S);
+    [de, ae] = ddma.safety(Ae, safe);
+    ok = isequal(dl, logical(q.lazy_domain(:))) && isequal(de, dl);
+    qq = find(dl);
+    for k = 1:numel(qq)
+        [lo, hi] = ddma.cell_bounds(p.Xedges, ddma.all_subs_of(Ae.shapeX, qq(k)));
+        x = 0.5 * (lo + hi);
+        ok = ok && isequal(ddma.controller_input(Al, al, x), ddma.controller_input(Ae, ae, x));
+    end
+    ok = ok && isequal(ddma.safety(Al, safe, [], dl), dl);
+    bad = false; try, ddma.reach_avoid(Al, safe, []); catch, bad = true; end
+    nfail = nfail + check(ok && bad, 'lazy abstraction (safety, on-demand inputs, known_winning)');
+    % per-output features
+    Sf = ddma.bd_fit(Z, p.Xn, edges, glo, ghi, -0.005, 0.005, 'all_matrix', '', [], {[1 2], [1 2 3]});
+    ok = close_to(Sf.raw{1}.lo, q.feat_lo0(:), 1e-9) && close_to(Sf.raw{1}.up, q.feat_hi0(:), 1e-9) && ...
+         close_to(Sf.raw{2}.lo, q.feat_lo1(:), 1e-9) && close_to(Sf.raw{2}.up, q.feat_hi1(:), 1e-9) && ...
+         isempty(Sf.lower);
+    Af = ddma.abstraction(p.Xedges, p.Uedges, Sf);
+    ok = ok && isequal(ddma.safety(Af, safe), logical(q.feat_domain(:)));
+    Sf2 = ddma.bd_update(ddma.bd_fit(Z(1:2000, :), p.Xn(1:2000, :), edges, glo, ghi, -0.005, 0.005, ...
+                                     'all_matrix', '', [], {[1 2], [1 2 3]}), Z(2001:end, :), p.Xn(2001:end, :));
+    ok = ok && close_to(Sf2.raw{2}.lo, Sf.raw{2}.lo, 1e-9) && close_to(Sf2.raw{2}.up, Sf.raw{2}.up, 1e-9);
+    nfail = nfail + check(ok, 'per-output features (bounds, abstraction, safety, update)');
+    % simulate (deterministic plant, centre inputs) and cells_meeting
+    plant = @(x, u) [x(1) + 0.1 * x(2), x(2) + 0.1 * (-sin(x(1)) - 0.2 * x(2) + u(1))];
+    [xs, us] = ddma.simulate(plant, Ae, ae, q.sim_x0, 40, 'center');
+    ok = isequal(size(xs), size(q.sim_xs)) && max(abs(xs(:) - q.sim_xs(:))) < 1e-12 && ...
+         max(abs(us(:) - q.sim_us(:))) < 1e-12;
+    ok = ok && isequal(ddma.cells_meeting(p.Xedges, [-0.2, -1.0], [0.0, 0.0]), logical(q.meeting(:)));
+    nfail = nfail + check(ok, 'simulate, cells_meeting');
+    % derivative-bound estimation (same pairs): both LP solutions optimal, same w rule
+    pr = struct('a1', q.est_a1(:), 'b1', q.est_b1(:), 'a2', q.est_a2(:), 'b2', q.est_b2(:));
+    [a_lo, a_hi, w] = ddma.estimate_derivative_bounds(q.est_Z, q.est_Y, [], [], 1, pr);
+    dz = q.est_Z(pr.a1, :) - q.est_Z(pr.b1, :); P1 = max(dz, 0); N1 = min(dz, 0);
+    dY = q.est_Y(pr.a1, :) - q.est_Y(pr.b1, :);
+    ok = true; worst = 0;
+    for i = 1:2
+        objm = lpobj(N1, P1, dY(:, i), a_lo(i, :), a_hi(i, :));
+        objp = lpobj(N1, P1, dY(:, i), q.est_a_lo(i, :), q.est_a_hi(i, :));
+        ok = ok && abs(objm - objp) <= 1e-6 * max(1, abs(objp));
+        worst = max([worst, max(abs(a_lo(i, :) - q.est_a_lo(i, :))), max(abs(a_hi(i, :) - q.est_a_hi(i, :)))]);
+    end
+    ok = ok && max(abs(w - q.est_w)) <= 1e-6 + 2 * worst * 4 && ...
+         abs(ddma.scenario_confidence(20000, 1e-6) - q.conf) < 1e-15;
+    nfail = nfail + check(ok, sprintf('estimate_derivative_bounds (same optimum; max coefficient diff %.1e)', worst));
+    % GrowthMap, compact maps, map update, minimal-map extras, data partition
+    G = ddma.growth_map(q.est_Z(1:500, :), q.est_Y(1:500, 1), q.gm_edges, [-2 0.5], [2 0.5], -0.01, 0.01);
+    [glo_, ghi_] = ddma.bounds(G, q.gm_zq);
+    ok = close_to(glo_, q.gm_lo(:), 1e-9) && close_to(ghi_, q.gm_hi(:), 1e-9);
+    [flo, fhi] = ddma.f_bounds(G, q.gm_zq);
+    ok = ok && close_to(flo, glo_ + 0.01, 1e-12) && close_to(fhi, ghi_ - 0.01, 1e-12);
+    sh = [ddma.grid_shape(q.gm_edges), 2];
+    S1 = ddma.fit(q.m_Z(1:300, :), q.m_Y(1:300, :), q.gm_edges, [-.02 -.02], [.02 .02]);
+    S2 = ddma.fit_update(S1, q.m_Z(301:900, :), q.m_Y(301:900, :));
+    ok = ok && isequal(reshape(S2.lower, sh), q.upd_lo) && isequal(reshape(S2.upper, sh), q.upd_hi) && ...
+         abs(ddma.bounded_fraction(S2) - q.upd_bfrac) < 1e-15 && ~any(ddma.is_empty(S2));
+    Sc = ddma.fit(q.m_Z(1:300, :), q.m_Y(1:300, :), q.gm_edges, [-.02 -.02], [.02 .02], [], [], true);
+    ok = ok && isa(Sc.lower, 'single') && isequal(double(reshape(Sc.lower, sh)), q.cmp_lo) && ...
+         isequal(double(reshape(Sc.upper, sh)), q.cmp_hi);
+    ok = ok && all(ddma.contains(S2, q.m_Z(1:900, :), q.m_Y(1:900, :)));
+    e = ddma.msm_estimate(q.m_Z(1:200, :), q.m_Y(1:200, :), [-.02 -.02], [.02 .02], q.gm_zq);
+    ok = ok && isequal(isnan(e), isnan(q.msm_est)) && max(abs(e(~isnan(e)) - q.msm_est(~isnan(e)))) < 1e-12;
+    ok = ok && ddma.msm_is_consistent(q.m_Z(1:200, :), q.m_Y(1:200, :), [-.02 -.02], [.02 .02]) == logical(q.msm_ok) && ...
+         ddma.msm_is_consistent(q.m_Z(1:200, :), -q.m_Y(1:200, :), [-.02 -.02], [.02 .02]) == logical(q.msm_bad_ok);
+    dp = ddma.data_partition(q.est_Z(1:7, :), [-1 -1], [1 1]);
+    ok = ok && all(cellfun(@(a, b) isequal(a(:), b(:)), dp(:), q.dp_edges(:)));
+    nfail = nfail + check(ok, 'growth_map, f_bounds, fit_update, compact, contains, msm extras, data_partition');
+    % approach 1 equals the Python BoundedDerivativeModel (TAC Prop. 8), zero bounds included
+    S1 = ddma.bd_fit(Z, p.Xn, edges, glo, ghi, -0.005, 0.005, 'two_matrix');
+    sh = [ddma.grid_shape(edges), 2];
+    nfail = nfail + check(close_to(reshape(S1.lower, sh), q.two_lo, 1e-12) && ...
+                          close_to(reshape(S1.upper, sh), q.two_hi, 1e-12), ...
+                          'two_matrix = Python BoundedDerivativeModel (approach 1)');
+end
+
 if nfail == 0
     fprintf('ALL MATLAB TESTS PASSED (%d backends)\n', numel(backends));
 else
@@ -213,6 +298,12 @@ ok = isequal(a == Inf, b == Inf) && isequal(a == -Inf, b == -Inf);
 f = isfinite(a) & isfinite(b);
 d = 0; if any(f), d = max(abs(a(f) - b(f))); end
 ok = ok && d <= tol;
+end
+
+function v = lpobj(N1, P1, dY, a_lo, a_hi)
+% value of the TAC LP (32) at (a_lo, a_hi) with its smallest feasible w
+w = max(0, 0.5 * max(dY - N1 * a_lo' - P1 * a_hi'));
+v = sum(N1, 1) * a_lo' + sum(P1, 1) * a_hi' + 2 * size(N1, 1) * w;
 end
 
 function f = check(ok, name)

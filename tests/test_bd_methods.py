@@ -245,6 +245,28 @@ def test_two_patterns_equal_approach_one():
     np.testing.assert_allclose(comp.lower.ravel()[fin], mlo[fin, 0], atol=1e-12)
 
 
+def test_two_matrix_with_zero_bounds_equals_two_patterns():
+    """A coordinate with derivative bounds [0, 0] is constant for approach 1 too (sign 0),
+    so "two_matrix" equals the two-pattern component also then (tighter than treating it
+    as increasing)."""
+    rng = np.random.default_rng(12)
+    Z = rng.uniform(-1, 1, (800, 2))
+    y = np.sin(2 * Z[:, 0]) + rng.uniform(-0.05, 0.05, 800)
+    glo, ghi = np.array([-2.0, 0.0]), np.array([2.0, 0.0])
+    P = RectangularPartition.uniform([-1.5, -1], [1.5, 1], [10, 4])  # data not at the ends
+    comp = SignMatrixComponent(P, glo, ghi, -0.05, 0.05, which="two")
+    comp.update(Z, y)
+    M = BoundedDerivativeModel.from_data(Z[:, :1], Z[:, 1:], y[:, None], P, glo[None, :1],
+                                         ghi[None, :1], glo[None, 1:], ghi[None, 1:],
+                                         -0.05, 0.05)
+    idx = P.all_indices()
+    lo, hi = P.cell_bounds(idx)
+    mlo, mhi = M.successor_bounds(idx, lo[:, :1], hi[:, :1], lo[:, 1:], hi[:, 1:])
+    assert np.all(np.isfinite(mhi)) and np.all(np.isfinite(mlo))
+    np.testing.assert_allclose(comp.upper.ravel(), mhi[:, 0], atol=1e-12)
+    np.testing.assert_allclose(comp.lower.ravel(), mlo[:, 0], atol=1e-12)
+
+
 def lorenz_like(X, U):
     x, y = X[:, 0], X[:, 1]
     return np.stack([x + 0.1 * np.sin(y), y + 0.1 * (np.cos(x) * y) + 0.1 * U[:, 0]], axis=1)

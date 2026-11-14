@@ -8,7 +8,7 @@
 
 and models of systems that are **not monotone but have bounded derivatives** (TAC 2024, Section III-C, and the five approaches of the PhD thesis, Chapter 3), with the symbolic abstractions and controller synthesis built on top of them (L4DC 2021, ADHS 2021). More model classes are planned (see the roadmap).
 
-**Python and MATLAB.** Both interfaces share one C++ core, they are tested against each other, and the experiments of the three papers and of the thesis chapter are reproduced (see [docs/REPRODUCTION.md](docs/REPRODUCTION.md)). The bounded-derivative models and their online updates are in both (`BoundedDerivativeModel` / `ddma.bd_fit`); lazy abstractions are Python only.
+**Python and MATLAB.** Both interfaces share one C++ core, they are tested against each other, and the experiments of the three papers and of the thesis chapter are reproduced (see [docs/REPRODUCTION.md](docs/REPRODUCTION.md)). Every feature is in both languages, and the MATLAB results are checked against Python's in CI: see [docs/PARITY.md](docs/PARITY.md) for the name of each function in each language.
 
 ![Minimal simulating map of a scalar monotone map](docs/figures/scalar_map.png)
 
@@ -58,14 +58,14 @@ Many dynamics are not monotone: a pendulum's acceleration grows with the angle u
 
 | `method=` | idea | when to use it |
 |---|---|---|
-| `"two_matrix"` (default) | subtract the steepest linear trends so that two monotone functions remain, learn both, intersect | fastest; cells far from the data stay unbounded |
+| `"two_matrix"` (default) | subtract the steepest linear trends so that two monotone functions remain, learn both, intersect | fastest; a cell stays unbounded until some data point lies on the right side of it for both transforms |
 | `"all_matrix"` | the same with every combination of slopes per output (2ⁿ monotone maps, one per orientation) | tighter, bounds every cell |
 | `"growth"` | each sample bounds the function inside a cone set by the derivative bounds; the tightest bound at every grid vertex is computed exactly, in one forward and one backward sweep per axis | as tight as `"all_matrix"`, bounds every cell, can be updated locally online (`update_local`) |
 | `"lin_mono"`, `"lin_growth"` | the same with a small linear program per cell for the final step | tightest; slower on large grids (bounds certified by duality, so solver tolerances cannot make them unsound) |
 
 ![Models of a map that is not monotone](docs/figures/bounded_derivative_map.png)
 
-With 25 samples and no data near the ends of the interval, the two-matrix model leaves the left end unbounded; the growth-cone model bounds the whole interval and is tighter everywhere. (`python examples/bounded_derivative_map.py`)
+With 25 samples and no data near the ends of the interval, both models bound the whole interval; the growth-cone model is tighter, most of all far from the data (mean width 1.24 against 1.51). (`python examples/bounded_derivative_map.py`, or `run examples/bounded_derivative_map` in MATLAB)
 
 In two dimensions the model is a pair of staircases, one value per cell, around the unknown function. Here the growth-cone model with the linear-programming step (approach 5) learned from 10⁷ samples of F(z) = cos z₁ + 0.5 cos z₂ + [−0.1, 0.1] on 51 × 51 cells (the example of thesis Section 3.4); the zoom shows the steps:
 
@@ -109,10 +109,11 @@ build_mex                         % optional: compiles the same C++ kernels as M
 run examples/acc_safety_filter    % the cruise-control example below, in MATLAB
 run examples/pendulum_bounded_derivatives   % a non-monotone system: bounded-derivative models
 run examples/online_refinement    % learning while running: the safe region grows, 0 violations
+run examples/lazy_synthesis       % lazy abstraction: a few percent of the transitions evaluated
 addpath tests; run_tests          % checks the MATLAB code against Python reference results
 ```
 
-The `+ddma` package mirrors the Python API: `ddma.fit`, `ddma.bd_fit` (the five bounded-derivative models; same struct as `ddma.fit`, so it goes straight into `ddma.abstraction`), `ddma.bd_update` / `ddma.bd_update_local` / `ddma.abstraction_refresh` / `ddma.safety(..., known_winning)` (online refinement), `ddma.msm_bounds`, `ddma.abstraction`, `ddma.safety`, `ddma.reach_avoid`, `ddma.controller_input` (which includes the safety filter), and the partition helpers.
+The `+ddma` package mirrors the Python API with functions on structs: `ddma.fit`, `ddma.bd_fit` (the five bounded-derivative models; same struct as `ddma.fit`, so it goes straight into `ddma.abstraction`), `ddma.growth_map`, `ddma.estimate_derivative_bounds`, `ddma.bd_update` / `ddma.bd_update_local` / `ddma.abstraction_refresh` / `ddma.safety(..., known_winning)` (online refinement), `ddma.abstraction(..., lazy)`, `ddma.safety`, `ddma.reach_avoid`, `ddma.controller_input` (which includes the safety filter), `ddma.simulate`, and the partition helpers. [docs/PARITY.md](docs/PARITY.md) lists every Python name with its MATLAB counterpart.
 
 ## Quick start
 
@@ -189,7 +190,7 @@ w.update(z_new[None], [y_new])   # one measurement at a time: about 0.1 ms on th
 | sign patterns (`signs=`) | known increasing (+1) / decreasing (−1) / no (0) dependence per output and input | ±1: order transformation for unknown linear functions (thesis Ch. 2); 0: extension in this package |
 | `SymbolicAbstraction` | finite abstraction of x⁺ ∈ f(x,u) + g(x,u) + D; successors stored as boxes of cells; `features=` for unknown parts that depend on a subset of (x, u) | L4DC 2021, ADHS 2021, TAC paper |
 | `safety`, `reach_avoid` | maximal controlled invariant set; reach-avoid with step counts. Exact fixed points in the C++ core: summed-area tables check a successor box in O(2^n); in `safety` each state keeps a pointer to its first input not yet ruled out, so every state–input pair is examined at most once over the whole fixed point; `reach_avoid` re-examines a state only when its successor hull gained a winning cell | standard fixed points |
-| `SymbolicAbstraction(..., lazy=True)` | no transitions stored: `safety` evaluates a transition only when its scan reaches it (states outside the safe set are never expanded, each state stops at its first good input). Memory O(\|Q\|) instead of O(\|Q\|·\|P\|); the controller computes its allowed inputs on demand. Same winning set. Python only | standard fixed point, transitions computed on demand |
+| `SymbolicAbstraction(..., lazy=True)` | no transitions stored: `safety` evaluates a transition only when its scan reaches it (states outside the safe set are never expanded, each state stops at its first good input). Memory O(\|Q\|) instead of O(\|Q\|·\|P\|); the controller computes its allowed inputs on demand. Same winning set | standard fixed point, transitions computed on demand |
 | `Controller` | concrete inputs (`pick=`), **safety filter** (`filter`), closed-loop `simulate` | |
 | `BoundedDerivativeModel` | unknown dynamics that are *not* monotone but have bounded partial derivatives. `method=`: `"two_matrix"` (two monotone maps, intersected; default), `"all_matrix"` (all sign combinations of the derivative bounds), `"growth"` (growth cones evaluated at the grid vertices, exact set-membership values there in one sweep per axis), and `"lin_mono"`, `"lin_growth"` (the same with a linear-programming final step, tightest). `update` adds data exactly; `update_local` (growth cones) updates only a window of cells around each new point, for online use. `local="cell"` / `"slab"` (growth cones) also intersects with the cones of the data points in each cell / in its slabs; `"slab"` is never looser than the min over data of each cone's max over the cell | TAC, Prop. 8; thesis Ch. 3 |
 | `GrowthMap` | the growth-cone model for one scalar function on its own: exact `update` (a per-point path for online use gives the same model as a batch refit), `update_local`, `bounds`, `f_bounds` | thesis Ch. 3 |

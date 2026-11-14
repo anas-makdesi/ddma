@@ -1,6 +1,9 @@
 function good = box_all_in(A, W, backend)
 %BOX_ALL_IN good(q, p): input p enabled at q and all successor cells of (q, p) are in W.
 %   backend: 'auto' (MEX if compiled, see build_mex) | 'mex' | 'matlab'. Same result.
+if isfield(A, 'lazy') && A.lazy
+    error('ddma:box_all_in', 'box_all_in needs an eager abstraction (lazy = false)');
+end
 if nargin < 3, backend = 'auto'; end
 if strcmp(backend, 'mex') || (strcmp(backend, 'auto') && exist('ddma_synth_mex', 'file') == 3)
     good = ddma_synth_mex('box_all_in', A.first, A.last, A.enabled, A.shapeX, logical(W(:)));

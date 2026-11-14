@@ -3,6 +3,9 @@ function [domain, allowed, value] = reach_avoid(A, target, avoid, backend)
 %   value(q) = number of steps needed (Inf if unreachable); allowed(q, p) inputs whose
 %   successors all have a smaller value.
 %   backend: 'auto' (MEX if compiled, see build_mex) | 'mex' | 'matlab'. Same result.
+if isfield(A, 'lazy') && A.lazy
+    error('ddma:reach_avoid', 'reach_avoid needs an eager abstraction (lazy = false)');
+end
 target = logical(target(:));
 if nargin < 3 || isempty(avoid), avoid = false(size(target)); end
 if nargin < 4, backend = 'auto'; end

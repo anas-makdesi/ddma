@@ -1,14 +1,18 @@
-function S = fit(Z, Y, edges, d_lo, d_hi, signs, backend)
+function S = fit(Z, Y, edges, d_lo, d_hi, signs, backend, compact)
 %FIT Tightest interval-valued simulating map on a fixed rectangular partition.
 %   S = ddma.fit(Z, Y, edges, d_lo, d_hi) computes sigma (TAC paper, Theorem 2) with the
 %   O(|K| log|Q| + |Q|) sweep (Proposition 5).
 %     Z (K x n), Y (K x m) data; edges: cell array of edge vectors (one per input);
 %     d_lo, d_hi: disturbance bounds (scalars or 1 x m).
 %   Optional: signs (m x n, -1/0/+1), backend 'auto' (MEX if compiled) | 'mex' | 'matlab'.
+%   compact = true: store the bounds as single, rounded outward (half the memory, still
+%   sound; see ddma.compact).
 %   S.lower, S.upper: N x m, cells in column-major order; S.shape, S.edges, S.d_lo, ...
+%   Refine with new data: ddma.fit_update (exact, TAC Prop. 3).
 [K, n] = size(Z); m = size(Y, 2);
 if nargin < 6 || isempty(signs), signs = ones(m, n); end
-if nargin < 7, backend = 'auto'; end
+if nargin < 7 || isempty(backend), backend = 'auto'; end
+if nargin < 8 || isempty(compact), compact = false; end
 d_lo = d_lo(:)' .* ones(1, m); d_hi = d_hi(:)' .* ones(1, m);
 if any(d_lo > d_hi), error('ddma:fit', 'need d_lo <= d_hi'); end
 theta = d_hi - d_lo;
@@ -21,6 +25,7 @@ else
 end
 S = struct('edges', {edges}, 'shape', shape, 'lower', lower, 'upper', upper, ...
            'd_lo', d_lo, 'd_hi', d_hi, 'signs', signs);
+if compact, S = ddma.compact(S); end
 end
 
 function [lower, upper] = fit_matlab(Z, Y, edges, theta, signs, shape)
