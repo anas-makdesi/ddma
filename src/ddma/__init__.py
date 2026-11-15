@@ -13,7 +13,7 @@ computed from data without a grid (A. Makdesi, M. Zamani, S. Jafarpour, IFAC Wor
 Congress 2026).
 """
 
-from .abstraction import SymbolicAbstraction, affine_bounds, transitions_to_data
+from .abstraction import AffineBounds, SymbolicAbstraction, affine_bounds, transitions_to_data
 from .bounded_derivatives import (
     BoundedDerivativeModel,
     estimate_derivative_bounds,
@@ -32,7 +32,7 @@ from .partitioned import PartitionedSimulatingMap, compiled_backend_available
 from .synthesis import Controller, reach_avoid, safety, simulate
 from .threads import get_num_threads, openmp_available, set_num_threads
 
-__version__ = "0.10.0"
+__version__ = "0.11.0"
 
 __all__ = [
     "BoundedDerivativeModel",
@@ -52,6 +52,7 @@ __all__ = [
     "set_num_threads",
     "RectangularPartition",
     "SymbolicAbstraction",
+    "AffineBounds",
     "affine_bounds",
     "reach_avoid",
     "safety",

@@ -1,15 +1,18 @@
-# Speed: threads in the learning kernels
+# Speed: threads in the learning kernels and the abstraction
 
-The kernels that learn models from data run on several threads (OpenMP) in both Python and
-MATLAB, because both use the same C++ core (`cpp/`):
+The kernels that learn models from data, and the one that builds the abstraction, run on
+several threads (OpenMP) in both Python and MATLAB, because both use the same C++ core
+(`cpp/`):
 
 | Kernel | Used by |
 |---|---|
 | `fit_sigma` (`cpp/ddma_core.hpp`) | monotone maps: `PartitionedSimulatingMap`, `BoundedDerivativeModel` (`two_matrix`, `all_matrix`, `lin_mono`); MATLAB `ddma.fit`, `ddma.bd_fit` |
 | `growth_vertices`, `growth_local` (`cpp/ddma_growth.hpp`) | growth cones: `GrowthMap`, `BoundedDerivativeModel` (`growth`, `lin_growth`, `local=`); MATLAB `ddma.growth_map`, `ddma.bd_fit` |
+| abstraction (`cpp/ddma_abstraction.hpp`, since v0.11) | `SymbolicAbstraction` (eager, lazy and `refresh`); MATLAB `ddma.abstraction`, `ddma.abstraction_refresh`, lazy transitions |
 
 **Results are bit-identical for any number of threads.** The tests check this for 1, 2 and
-all threads (`tests/test_threads.py`, `matlab/tests/run_threads_tests.m`).
+all threads (`tests/test_threads.py`, `tests/test_abstraction_backends.py`,
+`matlab/tests/run_threads_tests.m`, `matlab/tests/run_abstraction_tests.m`).
 
 ## Setting the number of threads
 
@@ -75,6 +78,42 @@ The sweeps visit memory contiguously: all outputs of a monotone map in one pass,
 `growth_local`, all patterns of a cell together. This alone makes some kernels faster on
 one thread.
 
+## The abstraction kernel
+
+For every state-input cell pair the abstraction needs the successor box (the map's bounds
+at the pair, plus the bounds of the known part g), clipped to an assumption box if there is
+one, then the range of cells the box meets. In NumPy this goes through several arrays of
+the size of all pairs; the kernel does it pair by pair without building them:
+
+- the map's bounds are read at `offq[q] + offp[p]`, two small offset tables computed once
+  from the coordinates the map depends on (`features`, per-output features);
+- g from `affine_bounds` is kept as a state part and an input part (`AffineBounds.parts`),
+  added per pair with the same operations as `affine_bounds` itself; any other `g_bounds`
+  function is evaluated in Python per block of pairs and passed in;
+- for the two-matrix bounded-derivative model, both maps and both affine parts are combined
+  per pair (`max(gm + sigma_minus, gp - sigma_plus)`); other models compute their boxes in
+  Python and the kernel does the rest;
+- the cell range on each axis comes from a table of equal-width buckets plus a short exact
+  scan, so the cost does not grow with the number of cells (and uneven partitions cost the
+  same as uniform ones).
+
+Pairs do not depend on each other: threads split the state cells and write to disjoint
+parts of the output. The arithmetic is that of the NumPy code (same operations, same
+order), so both backends give identical abstractions; `backend="numpy"` (MATLAB
+`'matlab'`) keeps the old code.
+
+Measured in a 2-core cloud VM (`python benchmarks/abstraction.py`; best of 3, rounded):
+
+| Workload | NumPy | C++, 1 thread | C++, 2 threads |
+|---|---:|---:|---:|
+| monotone map, uneven 301² states × 301 inputs (27 M pairs) | 6.7 s | 0.55 s | 0.36 s |
+| two-matrix model with features (Lorenz), 51³ × 51 (6.8 M pairs) | 4.0 s | 0.32 s | 0.17 s |
+| map + affine g + assumption, uneven 60³ × 12 (2.6 M pairs) | 1.1 s | 0.18 s | 0.10 s |
+
+In MATLAB (Octave, 150² × 150 = 3.4 M pairs) the MEX kernel takes 0.2 s on one thread
+against 0.9 s for the `.m` code. With a `g_bounds` function, evaluating g in MATLAB takes
+most of the time (0.4 s against 0.6 s).
+
 ## Measuring
 
 ```
@@ -86,3 +125,10 @@ python benchmarks/kernels.py --threads 1 --mode direct   # the v0.8 scatter
 The script splits each kernel's time into scatter and sweeps. Gains depend on the machine
 (cores, cache sizes, memory bandwidth): the scatter is limited by memory access, so it
 gains less from threads than the sweeps.
+
+For the abstraction:
+
+```
+python benchmarks/abstraction.py              # C++ on all threads, and NumPy
+python benchmarks/abstraction.py --threads 1
+```

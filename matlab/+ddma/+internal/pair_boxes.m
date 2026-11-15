@@ -9,6 +9,12 @@ k = numel(q);
 qs = ddma.all_subs_of(A.shapeX, q); ps = ddma.all_subs_of(A.shapeU, p);
 [xlo, xhi] = ddma.cell_bounds(Xedges, qs);
 [ulo, uhi] = ddma.cell_bounds(Uedges, ps);
+if ddma.internal.abs_use_mex(A)
+    glo = []; ghi = [];
+    if ~isempty(g_bounds), [glo, ghi] = g_bounds(xlo, xhi, ulo, uhi); end
+    [ok, F, L] = ddma.internal.abs_mex(A, S, q, p, true, glo, ghi);
+    return
+end
 Xlo = cellfun(@(e) e(1), Xedges(:)'); Xhi = cellfun(@(e) e(end), Xedges(:)');
 sub = [qs, ps];
 [lo, hi] = ddma.internal.map_bounds_at(S, sub(:, features));
@@ -17,8 +23,11 @@ if ~isempty(g_bounds)
     lo = lo + glo; hi = hi + ghi;
 end
 if ~isempty(assumption)
+    % NaN bounds stay NaN (max/min would drop them), so the pair is not enabled
+    nl = isnan(lo); nh = isnan(hi);
     lo = min(max(lo, assumption(1, :)), assumption(2, :));
     hi = min(max(hi, assumption(1, :)), assumption(2, :));
+    lo(nl) = NaN; hi(nh) = NaN;
 end
 ok = all(lo <= hi, 2) & all(isfinite(lo) & isfinite(hi), 2) & all(lo >= Xlo & hi <= Xhi, 2);
 F = zeros(k, nx); L = F;

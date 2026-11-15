@@ -1,12 +1,14 @@
-"""Number of threads used by ddma's compiled learning kernels.
+"""Number of threads used by ddma's compiled kernels.
 
 The kernels that learn models from data (the monotone maps of ``PartitionedSimulatingMap``
 and ``BoundedDerivativeModel``, and the growth cones of ``GrowthMap`` and the growth
-methods) run on several threads when the compiled kernel was built with OpenMP.
+methods) and the one that builds ``SymbolicAbstraction`` run on several threads when the
+compiled kernel was built with OpenMP.
 
-Results are **bit-identical for any number of threads**: the kernels only keep minima and
-maxima of the data, which do not depend on the order in which threads write them, and
-every running min/max along the grid is computed by one thread in a fixed order.
+Results are **bit-identical for any number of threads**: the learning kernels only keep
+minima and maxima of the data, which do not depend on the order in which threads write
+them, and every running min/max along the grid is computed by one thread in a fixed order;
+in the abstraction every state-input pair is computed on its own.
 
 By default the kernels use OpenMP's default: the value of the environment variable
 ``OMP_NUM_THREADS`` if it is set, otherwise all cores.

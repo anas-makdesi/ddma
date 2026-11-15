@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.11.0 (16 November 2026)
+
+**Abstractions built in C++, on all cores**
+- `SymbolicAbstraction` computes its transitions in the C++ core (`cpp/ddma_abstraction.hpp`), on several threads, with the same result as before for any number of threads: 7–12× faster than NumPy on one thread (e.g. 27 million state-input pairs in about 0.5 s instead of 7 s), more with threads. Eager and lazy abstractions and `refresh` all use it; `backend="numpy"` keeps the NumPy code.
+- Monotone maps (also with `features`), the two-matrix bounded-derivative model (with per-output features) and `g_bounds` from `affine_bounds` are evaluated entirely in the kernel; other models and other `g_bounds` functions are evaluated in NumPy per block of pairs and the kernel does the rest (clipping, checks, cell ranges).
+- `affine_bounds` now returns an `AffineBounds` object (callable as before) whose `parts` gives the state and input parts separately.
+- Cell ranges from a bucket table with an exact final scan: constant time per value, also on uneven partitions.
+- MATLAB: MEX `ddma_abs_mex` (built by `build_mex`), used by `ddma.abstraction`, `ddma.abstraction_refresh` and lazy abstractions; `ddma.abstraction(..., lazy, backend)` with `'auto'`, `'mex'`, `'matlab'`. About 4.5× faster than the `.m` code on one thread.
+- MATLAB: a NaN bound clipped to an assumption box now stays NaN (the pair is not enabled), as in Python; before, `max`/`min` replaced it by the box bound.
+- Tests `tests/test_abstraction_backends.py`, `matlab/tests/run_abstraction_tests.m`; benchmark `benchmarks/abstraction.py`; `docs/PERFORMANCE.md`.
+
 ## 0.10.0 (15 November 2026)
 
 **Multithreaded learning** (OpenMP)

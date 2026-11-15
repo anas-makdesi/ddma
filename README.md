@@ -137,7 +137,7 @@ pip install -e ".[dev]"       # + pytest and ruff
 
 Without a C++ compiler the package falls back to NumPy, which gives identical results, only slower. `ddma.compiled_backend_available()` tells you which backend is in use.
 
-The compiled kernels learn on all cores by default (OpenMP), with results that are bit-identical for any number of threads; `ddma.set_num_threads(n)` limits them. On macOS, run `brew install libomp` once before installing, otherwise the kernels run on one thread. Details: [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
+The compiled kernels learn models and build abstractions on all cores by default (OpenMP), with results that are bit-identical for any number of threads; `ddma.set_num_threads(n)` limits them. On macOS, run `brew install libomp` once before installing, otherwise the kernels run on one thread. Details: [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 
 **MATLAB / Octave**
 
@@ -237,8 +237,8 @@ w.update(z_new[None], [y_new])   # one measurement at a time: about 0.1 ms on th
 | online refinement | `SymbolicAbstraction.refresh()` recomputes only the transitions of the states changed by `update_local`; `safety(..., known_winning=previous_set)` updates the maximal invariant set exactly, keeping the previous set (which stays controlled invariant when the model is refined) | |
 | `estimate_derivative_bounds`, `scenario_confidence` | derivative and disturbance bounds from data, with the scenario-approach guarantee | TAC, Sec. IV, Prop. 9 |
 | `SymbolicAbstraction(..., assumption=)` | assume-guarantee contracts (e.g. "if the leader's speed stays in [a, b] …") | ADHS, TAC |
-| `cpp/ddma_core.hpp`, `cpp/ddma_synthesis.hpp`, `cpp/ddma_growth.hpp`, `cpp/ddma_parallel.hpp` | header-only C++ kernels used by both the Python and MATLAB interfaces: map fitting (float64, or float32 with outward rounding), the synthesis fixed points, and the growth-cone fits (vertex values and the cell/slab maps, the latter in time independent of the slab size); the learning kernels run on several threads (OpenMP, optional), with results that do not depend on the number of threads | |
-| `set_num_threads`, `get_num_threads`, `openmp_available` | number of threads of the learning kernels (default: all cores) | |
+| `cpp/ddma_core.hpp`, `cpp/ddma_synthesis.hpp`, `cpp/ddma_growth.hpp`, `cpp/ddma_abstraction.hpp`, `cpp/ddma_parallel.hpp` | header-only C++ kernels used by both the Python and MATLAB interfaces: map fitting (float64, or float32 with outward rounding), the abstraction's transitions, the synthesis fixed points, and the growth-cone fits (vertex values and the cell/slab maps, the latter in time independent of the slab size); the learning kernels and the abstraction run on several threads (OpenMP, optional), with results that do not depend on the number of threads | |
+| `set_num_threads`, `get_num_threads`, `openmp_available` | number of threads of the learning kernels and the abstraction (default: all cores) | |
 | `ddma.plotting` | paper-style figures: transparent staircase bounds, 3-D and 2-D sets | |
 
 ## Reproducing the papers
@@ -263,12 +263,12 @@ The Python tests are in `tests/` and run in under a minute with `pytest`. They c
 - **Original implementation**: the grid algorithm reproduces the original MATLAB implementation (`Data2Sigma0` + `ApproximationMonotoneSystemData3`) bit for bit on random problems.
 - **Backends and languages**: the C++ and NumPy backends are bit-identical. The MATLAB code, both pure `.m` and MEX, reproduces the Python results exactly (map, abstraction, safety, reach-avoid; the five bounded-derivative models to within 1e-15, and their online updates), and the MEX fixed points equal the `.m` ones on random 1-D to 3-D abstractions. It has been run in MATLAB (MATLAB Online: tests, examples and figures) and CI runs it under Octave.
 - **Safe envelopes**: the monotone search equals brute-force enumeration; the closed-form pair bound equals an LP solver; every certified corner or box is pushed through the true dynamics with random inputs and worst-case disturbances, and closed loops from thousands of certified states never leave the envelope (Python and MATLAB, MATLAB checked against Python).
-- **Threads**: every learning kernel gives the same bits with 1, 2 and all threads and with every way of sharing the work among them, in Python and MATLAB, and the same bits as the earlier single-threaded kernels. CI builds with and without OpenMP (on demand also on macOS and Windows).
+- **Threads**: every learning kernel gives the same bits with 1, 2 and all threads and with every way of sharing the work among them, in Python and MATLAB, and the same bits as the earlier single-threaded kernels. The compiled abstraction equals the NumPy and `.m` code on every kind of model, `g`, assumption and partition, for any number of threads. CI builds with and without OpenMP (on demand also on macOS and Windows).
 - **Closed loop**: simulated trajectories under the synthesized controllers and the safety filter never leave the safe set and always reach the target.
 
 ## Roadmap
 
-Next: abstraction construction in C++ with threads, documentation site and pre-built wheels. See [docs/ROADMAP.md](docs/ROADMAP.md).
+Next: documentation site and pre-built wheels. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Authors
 

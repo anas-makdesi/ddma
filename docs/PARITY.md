@@ -29,7 +29,7 @@ The data of `bd_fit` are `Z = [X U]` and `Y = X' - g(X, U)`, as for `ddma.fit` (
 
 | Python | MATLAB | Tested against Python |
 |---|---|---|
-| `SymbolicAbstraction(X, U, model, g_bounds=, features=, assumption=)` | `A = ddma.abstraction(Xedges, Uedges, S, g_bounds, features, assumption)` | exact transitions |
+| `SymbolicAbstraction(X, U, model, g_bounds=, features=, assumption=, backend=)` | `A = ddma.abstraction(Xedges, Uedges, S, g_bounds, features, assumption, lazy, backend)` | exact transitions (C++ kernel on all threads by default; `backend` `"numpy"` / `'matlab'` for the plain code) |
 | `..., lazy=True` | `ddma.abstraction(..., true)` (7th argument) | same winning set and inputs |
 | `.refresh(states=None)` | `[A, S, mask] = ddma.abstraction_refresh(A, S, states)` | exact (mask, transitions) |
 | `.cells_inside`, `.cells_meeting` | `ddma.cells_inside(edges, lo, hi)`, `ddma.cells_meeting(edges, lo, hi)` | exact |

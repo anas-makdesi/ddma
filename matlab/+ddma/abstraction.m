@@ -1,4 +1,4 @@
-function A = abstraction(Xedges, Uedges, S, g_bounds, features, assumption, lazy)
+function A = abstraction(Xedges, Uedges, S, g_bounds, features, assumption, lazy, backend)
 %ABSTRACTION Symbolic abstraction of x+ in f(x,u) + g(x,u) + W from a fitted map S.
 %   A = ddma.abstraction(Xedges, Uedges, S, g_bounds, features, assumption)
 %     Xedges, Uedges: state and input partitions (cell arrays of edges);
@@ -16,11 +16,20 @@ function A = abstraction(Xedges, Uedges, S, g_bounds, features, assumption, lazy
 %   good input. Memory O(nQ) instead of O(nQ nP); same winning set. ddma.controller_input
 %   computes the allowed inputs on demand. reach_avoid needs an eager abstraction.
 %   Same as the Python SymbolicAbstraction(..., lazy=True).
+%   backend: 'auto' (default: the MEX kernel ddma_abs_mex if built, on all cores, see
+%   ddma.set_num_threads), 'mex' or 'matlab'. All give the same abstraction.
 nx = numel(Xedges); nu = numel(Uedges);
 if nargin < 4, g_bounds = []; end
 if nargin < 5 || isempty(features), features = 1:(nx + nu); end
 if nargin < 6, assumption = []; end
 if nargin < 7 || isempty(lazy), lazy = false; end
+if nargin < 8 || isempty(backend), backend = 'auto'; end
+if ~any(strcmp(backend, {'auto', 'mex', 'matlab'}))
+    error('ddma:abstraction', 'backend must be ''auto'', ''mex'' or ''matlab''');
+end
+if strcmp(backend, 'mex') && exist('ddma_abs_mex', 'file') ~= 3
+    error('ddma:abstraction', 'ddma_abs_mex is not built (run build_mex)');
+end
 joint = [Xedges(:); Uedges(:)];
 for k = 1:numel(features)
     if ~isequal(joint{features(k)}(:), S.edges{k}(:))
@@ -32,7 +41,8 @@ nQ = prod(shX); nP = prod(shU);
 A = struct('Xedges', {Xedges}, 'Uedges', {Uedges}, 'shapeX', shX, 'shapeU', shU, ...
            'first', zeros(0, 0, nx, 'int32'), 'last', zeros(0, 0, nx, 'int32'), ...
            'enabled', false(0, 0), 'lazy', logical(lazy));
-A.opts = struct('g_bounds', {g_bounds}, 'features', features, 'assumption', assumption);
+A.opts = struct('g_bounds', {g_bounds}, 'features', features, 'assumption', assumption, ...
+                'backend', backend);
 if A.lazy
     A.S = S;
     return
