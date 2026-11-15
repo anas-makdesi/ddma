@@ -32,7 +32,7 @@ from .partitioned import PartitionedSimulatingMap, compiled_backend_available
 from .synthesis import Controller, reach_avoid, safety, simulate
 from .threads import get_num_threads, openmp_available, set_num_threads
 
-__version__ = "0.9.0"
+__version__ = "0.10.0"
 
 __all__ = [
     "BoundedDerivativeModel",

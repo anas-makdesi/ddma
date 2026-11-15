@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.10.0 (15 November 2026)
 
 **Multithreaded learning** (OpenMP)
 - The learning kernels (`fit_sigma` for the monotone maps and the `two_matrix`, `all_matrix`, `lin_mono` models; `growth_vertices` and `growth_local` for `GrowthMap` and the growth models) run on all cores by default. Results are bit-identical for any number of threads, and identical to v0.9.
