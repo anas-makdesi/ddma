@@ -84,7 +84,6 @@ inline int& scatter_mode() {
 // per-core L2 cache while it is filled.
 constexpr std::size_t kBlockBytes = std::size_t(256) << 10;   // 256 KB
 constexpr std::size_t kPrivateBytes = std::size_t(4) << 20;   // small grid: copies <= 4 MB
-constexpr std::size_t kPrivateBudget = std::size_t(512) << 20; // all extra copies <= 512 MB
 constexpr std::ptrdiff_t kMaxBlocks = 4096;
 // values per round (bucketed) / points per round (owned); internal knob for tests
 inline std::ptrdiff_t& chunk_entries() {
@@ -144,9 +143,9 @@ DDMA_FLATTEN void scatter_direct_flat(std::ptrdiff_t K, T* up, T* lo, MakeGen& m
 // `make_span()` (optional) returns span(k, first, last): the smallest range of indices
 // [first, last] point k writes to, cheaper than running g. Kernels whose points write many
 // values (growth cones) give one; on big grids they then use the "owned" mode. Kernels
-// whose points write few values (fit_sigma) use private copies, or "bucketed" when the
-// copies would take too much memory. These choices come from measurements
-// (benchmarks/kernels.py); every mode gives the same result.
+// whose points write few values (fit_sigma) use "bucketed" on big grids, also on one
+// thread. These choices come from measurements on a laptop (benchmarks/kernels.py);
+// every mode gives the same result.
 //
 // A NaN value is never kept (min(x, NaN) = x as written below), so NaN data are ignored
 // in every mode alike.
@@ -164,16 +163,16 @@ void minmax_scatter(std::ptrdiff_t K, std::ptrdiff_t N, T* up, T* lo, std::ptrdi
       mode = SCATTER_DIRECT;  // small update: threads would cost more than they save
     else if (grid_bytes <= kBlockBytes)
       mode = nt > 1 ? SCATTER_PRIVATE : SCATTER_DIRECT;  // whole grid already in cache
+    else if (!has_span)
+      // few values per point (fit_sigma): sorting by block keeps the writes in cache;
+      // measured fastest on a laptop for 1 to 4 threads (up to 2x on one thread)
+      mode = (nt > 1 && grid_bytes <= kPrivateBytes) ? SCATTER_PRIVATE : SCATTER_BUCKETED;
     else if (nt == 1)
-      mode = SCATTER_DIRECT;  // no reliable gain from sorting on one thread
+      mode = SCATTER_DIRECT;  // many values per point: too many to sort
     else if (grid_bytes <= kPrivateBytes)
       mode = SCATTER_PRIVATE;
-    else if (has_span)
-      mode = SCATTER_OWNED;  // many values per point: copies would be costly to merge
-    else if (grid_bytes * std::size_t(nt - 1) <= kPrivateBudget)
-      mode = SCATTER_PRIVATE;  // few values per point: copies are the fastest
     else
-      mode = SCATTER_BUCKETED;  // too big to copy
+      mode = SCATTER_OWNED;  // many values per point: parts, not copies to merge
   }
   if (mode == SCATTER_OWNED && !has_span) mode = SCATTER_BUCKETED;
 

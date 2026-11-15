@@ -47,15 +47,18 @@ the same order as on one thread.
 
 How the scatter is shared among threads (`cpp/ddma_parallel.hpp`, chosen automatically):
 
-- **private copies** (grids up to a memory budget, few values per point): each thread
-  fills its own copy of the grid with its share of the points; the copies are then merged.
-- **owned parts** (growth cones on large grids, many values per point): the grid is cut
-  into parts; points are listed under the parts they write to; each thread fills whole
-  parts, so no two threads write to the same cell.
-- **bucketed** (`fit_sigma` on grids too large to copy): the values are first sorted by
-  block of the grid, then each block is filled by one thread.
-- **direct** (one thread or small updates): each value is written straight into the grid,
-  as in v0.8. Online updates with a few points always use this path.
+- **bucketed** (`fit_sigma` on grids larger than a few MB, also on one thread): the values
+  are first sorted by block of the grid (a block fits in the processor's cache), then each
+  block is filled by one thread. Writing into a block that sits in cache is much faster
+  than writing all over a big array.
+- **owned parts** (growth cones on large grids, which write many values per point): the
+  grid is cut into parts; points are listed under the parts they write to; each thread
+  fills whole parts, so no two threads write to the same cell.
+- **private copies** (small grids): each thread fills its own copy of the grid with its
+  share of the points; the copies are then merged.
+- **direct** (growth cones on one thread, and small updates): each value is written
+  straight into the grid, as in v0.8. Online updates with a few points always use this
+  path.
 
 The sweeps visit memory contiguously: all outputs of a monotone map in one pass, and, for
 `growth_local`, all patterns of a cell together. This alone makes some kernels faster on
