@@ -16,9 +16,10 @@ all threads (`tests/test_threads.py`, `matlab/tests/run_threads_tests.m`).
 Default: the value of `OMP_NUM_THREADS` if it is set, otherwise all cores.
 
 ```python
-from ddma.threads import set_num_threads, get_num_threads, openmp_available
-set_num_threads(4)      # 4 threads
-set_num_threads(None)   # back to the default
+import ddma
+ddma.set_num_threads(4)      # 4 threads
+ddma.set_num_threads(None)   # back to the default
+ddma.get_num_threads(), ddma.openmp_available()
 ```
 
 ```matlab

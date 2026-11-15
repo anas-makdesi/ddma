@@ -10,7 +10,7 @@ Planned work, roughly in order. Contributions and suggestions are welcome throug
 - **Richer specifications**: reach-while-stay, recurrence, and specifications given by automata.
 
 ## Performance
-- Multithreaded learning kernel (OpenMP).
+- Abstraction construction in C++ with threads (the learning kernels are multithreaded since v0.10).
 - Streaming fit with constant memory for any number of samples.
 - Non-uniform and adaptive partitions that refine where the specification is decided.
 

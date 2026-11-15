@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+**Multithreaded learning** (OpenMP)
+- The learning kernels (`fit_sigma` for the monotone maps and the `two_matrix`, `all_matrix`, `lin_mono` models; `growth_vertices` and `growth_local` for `GrowthMap` and the growth models) run on all cores by default. Results are bit-identical for any number of threads, and identical to v0.9.
+- `ddma.set_num_threads(n)`, `ddma.get_num_threads()`, `ddma.openmp_available()`; MATLAB `ddma.set_num_threads(n)`, `ddma.get_num_threads()`.
+- Faster on one thread too: monotone maps sort their writes by block of the grid so they stay in the cache, and the sweeps read memory in order.
+- Builds: GCC/Clang (`-fopenmp`), Microsoft's compiler (`/openmp`), Apple's compiler with Homebrew's `libomp`; without OpenMP the kernels run on one thread with the same results (`DDMA_NO_OPENMP=1`, `build_mex(false)`). Errors inside the threads (e.g. out of memory) are raised normally.
+- Tests `tests/test_threads.py`, `matlab/tests/run_threads_tests.m`; `docs/PERFORMANCE.md`; `benchmarks/kernels.py`.
+
 ## 0.9.0 (14 November 2026)
 
 **Safe envelopes from data, without a grid** (`ddma.invariance`; methods of Makdesi & Zamani and Makdesi, Zamani & Jafarpour, IFAC World Congress 2026)

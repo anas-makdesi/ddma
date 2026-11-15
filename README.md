@@ -46,7 +46,7 @@ From sampled transitions, `ddma` learns the speed dynamics, builds a 6,600-state
 | 20,000 | 37.1 % | 0.001 s | 0.04 s | 0.003 s |
 | 200,000 | 38.1 % | 0.007 s | 0.04 s | 0.003 s |
 
-Times measured on a single CPU core in a cloud container; they vary from run to run.
+Times measured in a cloud container; they vary from run to run.
 
 Without the filter, the naive controller drops below the 10 m gap after 9 s and collides at 11.5 s. With the filter, the gap stays above 11 m for the full 200 s.
 
@@ -87,7 +87,7 @@ In two dimensions the model is a pair of staircases, one value per cell, around 
 | `lin_mono` | 23 s | 0.1 s | 0.01 s | 17.6 % |
 | `lin_growth` | 26 s | 0.1 s | 0.01 s | 17.8 % |
 
-(`python examples/pendulum_bounded_derivatives.py`; times on one CPU core, indicative.)
+(`python examples/pendulum_bounded_derivatives.py`; times indicative.)
 
 ## Reinforcement learning that never violates its constraints
 
@@ -137,11 +137,13 @@ pip install -e ".[dev]"       # + pytest and ruff
 
 Without a C++ compiler the package falls back to NumPy, which gives identical results, only slower. `ddma.compiled_backend_available()` tells you which backend is in use.
 
+The compiled kernels learn on all cores by default (OpenMP), with results that are bit-identical for any number of threads; `ddma.set_num_threads(n)` limits them. On macOS, run `brew install libomp` once before installing, otherwise the kernels run on one thread. Details: [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
+
 **MATLAB / Octave**
 
 ```matlab
 cd matlab
-build_mex                         % optional: compiles the same C++ kernels as MEX files
+build_mex                         % optional: compiles the same C++ kernels as MEX files (with threads)
 run examples/acc_safety_filter    % the cruise-control example below, in MATLAB
 run examples/pendulum_bounded_derivatives   % a non-monotone system: bounded-derivative models
 run examples/online_refinement    % learning while running: the safe region grows, 0 violations
@@ -235,7 +237,8 @@ w.update(z_new[None], [y_new])   # one measurement at a time: about 0.1 ms on th
 | online refinement | `SymbolicAbstraction.refresh()` recomputes only the transitions of the states changed by `update_local`; `safety(..., known_winning=previous_set)` updates the maximal invariant set exactly, keeping the previous set (which stays controlled invariant when the model is refined) | |
 | `estimate_derivative_bounds`, `scenario_confidence` | derivative and disturbance bounds from data, with the scenario-approach guarantee | TAC, Sec. IV, Prop. 9 |
 | `SymbolicAbstraction(..., assumption=)` | assume-guarantee contracts (e.g. "if the leader's speed stays in [a, b] …") | ADHS, TAC |
-| `cpp/ddma_core.hpp`, `cpp/ddma_synthesis.hpp`, `cpp/ddma_growth.hpp` | header-only C++ kernels used by both the Python and MATLAB interfaces: map fitting (float64, or float32 with outward rounding), the synthesis fixed points, and the growth-cone fits (vertex values and the cell/slab maps, the latter in time independent of the slab size) | |
+| `cpp/ddma_core.hpp`, `cpp/ddma_synthesis.hpp`, `cpp/ddma_growth.hpp`, `cpp/ddma_parallel.hpp` | header-only C++ kernels used by both the Python and MATLAB interfaces: map fitting (float64, or float32 with outward rounding), the synthesis fixed points, and the growth-cone fits (vertex values and the cell/slab maps, the latter in time independent of the slab size); the learning kernels run on several threads (OpenMP, optional), with results that do not depend on the number of threads | |
+| `set_num_threads`, `get_num_threads`, `openmp_available` | number of threads of the learning kernels (default: all cores) | |
 | `ddma.plotting` | paper-style figures: transparent staircase bounds, 3-D and 2-D sets | |
 
 ## Reproducing the papers
@@ -251,7 +254,7 @@ w.update(z_new[None], [y_new])   # one measurement at a time: about 0.1 ms on th
 
 ## How it's tested
 
-The Python tests are in `tests/` and run in about 10 s with `pytest`. They check the guarantees rather than the outputs alone:
+The Python tests are in `tests/` and run in under a minute with `pytest`. They check the guarantees rather than the outputs alone:
 
 - **Soundness**: the true system lies inside the learned map on thousands of random queries, for random monotone functions and sign patterns.
 - **Minimality**: the bounds are attained by monotone functions consistent with the data.
@@ -260,11 +263,12 @@ The Python tests are in `tests/` and run in about 10 s with `pytest`. They check
 - **Original implementation**: the grid algorithm reproduces the original MATLAB implementation (`Data2Sigma0` + `ApproximationMonotoneSystemData3`) bit for bit on random problems.
 - **Backends and languages**: the C++ and NumPy backends are bit-identical. The MATLAB code, both pure `.m` and MEX, reproduces the Python results exactly (map, abstraction, safety, reach-avoid; the five bounded-derivative models to within 1e-15, and their online updates), and the MEX fixed points equal the `.m` ones on random 1-D to 3-D abstractions. It has been run in MATLAB (MATLAB Online: tests, examples and figures) and CI runs it under Octave.
 - **Safe envelopes**: the monotone search equals brute-force enumeration; the closed-form pair bound equals an LP solver; every certified corner or box is pushed through the true dynamics with random inputs and worst-case disturbances, and closed loops from thousands of certified states never leave the envelope (Python and MATLAB, MATLAB checked against Python).
+- **Threads**: every learning kernel gives the same bits with 1, 2 and all threads and with every way of sharing the work among them, in Python and MATLAB, and the same bits as the earlier single-threaded kernels. CI builds with and without OpenMP (on demand also on macOS and Windows).
 - **Closed loop**: simulated trajectories under the synthesized controllers and the safety filter never leave the safe set and always reach the target.
 
 ## Roadmap
 
-Next: faster learning kernels (multithreading), documentation site and pre-built wheels. See [docs/ROADMAP.md](docs/ROADMAP.md).
+Next: abstraction construction in C++ with threads, documentation site and pre-built wheels. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Authors
 

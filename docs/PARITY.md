@@ -52,11 +52,22 @@ The data of `bd_fit` are `Z = [X U]` and `Y = X' - g(X, U)`, as for `ddma.fit` (
 |---|---|---|
 | `monotone_envelope(X, Xn, U, w_lo=, w_hi=, x_lo=, x_hi=, state_signs=, input_signs=, u_lo=, u_hi=)` | `ddma.monotone_envelope(X, Xn, U, opts)` (same option names in a struct) | same corners and (corner, input) pairs |
 | `embedding_envelope(X, Xn, U, jx_lo, jx_hi, ju_lo, ju_hi, w_lo=, w_hi=, x_lo=, x_hi=, pairs=)` | `ddma.embedding_envelope(X, Xn, U, jx_lo, jx_hi, ju_lo, ju_hi, opts)` (pairs 1-based) | same boxes, input boxes and pairs |
+| returned objects `MonotoneEnvelope`, `BoxEnvelope` | structs with the same fields | — |
 | `env.contains(x)` | `ddma.envelope_contains(E, x)` | same on 2,000 states |
 | `env.safe_input(x, u_desired)` | `ddma.envelope_input(E, x, u_desired)` | same inputs |
 | `ddma.invariance.maximal_points`, `max_min_cones` | `ddma.maximal_points`, `ddma.max_min_cones` | equal |
 
 Tests: `matlab/tests/run_invariance_tests.m` (reference written by `matlab/tests/make_reference_invariance.py`).
+
+## Threads
+
+| Python | MATLAB | Tested |
+|---|---|---|
+| `ddma.set_num_threads(n)` (`None` or 0: default, all cores or `OMP_NUM_THREADS`) | `ddma.set_num_threads(n)` (`[]` or 0: default) | same bits for 1, 2 and all threads (`tests/test_threads.py`, `matlab/tests/run_threads_tests.m`) |
+| `ddma.get_num_threads()`, `ddma.openmp_available()` | `[n, openmp] = ddma.get_num_threads()` | — |
+| `ddma.compiled_backend_available()` | `exist('ddma_fit_mex', 'file') == 3` | — |
+
+See [PERFORMANCE.md](PERFORMANCE.md).
 
 ## Partitions and plots
 
@@ -68,6 +79,19 @@ Tests: `matlab/tests/run_invariance_tests.m` (reference written by `matlab/tests
 | `RectangularPartition.product(P1, P2)`, `.project(dims)` | `[E1(:); E2(:)]`, `E(dims)` |
 | `.locate(Z)`, `.cell_bounds(idx)` | `ddma.locate(edges, Z)`, `ddma.cell_bounds(edges, sub)` |
 | `ddma.plotting.plot_staircase_bounds`, `plot_set_3d`, `plot_set_2d` | `ddma.plot_bounds`, `ddma.plot_set` |
+
+## Helpers
+
+MATLAB needs a few small functions that Python gets from NumPy or keeps internal:
+
+| Python | MATLAB |
+|---|---|
+| `partition.shape` | `ddma.grid_shape(edges)` |
+| `partition.search(i, z, side)` (= `numpy.searchsorted`) | `ddma.searchsorted(e, z, side)` |
+| `numpy.ravel_multi_index` / `numpy.unravel_index` | `ddma.flat_index(shape, sub)` / `ddma.all_subs_of(shape, f)`, `ddma.all_subs(shape)` (MATLAB order, 1-based indices) |
+| `numpy.random.default_rng(n)` | `ddma.seed(n)` (MATLAB and Octave) |
+| internal: successor-box test of the synthesis | `ddma.box_all_in(A, W, backend)` |
+| internal: certified LP bound of the `lin_*` methods (`ddma._box_lp.max_min_affine`) | `ddma.max_min_affine(...)` |
 
 ## Examples
 
@@ -90,4 +114,4 @@ The examples use random data, so the two languages draw different samples and pr
 - **Paper reproductions** (`reproductions/`) are Python scripts; `matlab/examples/paper_figures.m` redraws the paper figures in MATLAB.
 - **LP final steps** (`'lin_mono'`, `'lin_growth'`) and `estimate_derivative_bounds` need `linprog` (Optimization Toolbox) in MATLAB; Octave has `glpk` built in. The LP bounds are certified by weak duality in both languages, so they are sound whatever the solver.
 - **RL training** in MATLAB needs the Reinforcement Learning Toolbox; ddma's filter functions do not, and the MATLAB example runs without it.
-- **Compiled kernels**: Python builds them on install; MATLAB with `build_mex` (plain MATLAB code is used otherwise, with the same results).
+- **Compiled kernels**: Python builds them on install; MATLAB with `build_mex` (plain MATLAB code is used otherwise, with the same results). Both use threads (OpenMP) when the compiler supports it; the plain MATLAB code runs on one thread.
