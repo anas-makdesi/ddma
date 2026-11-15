@@ -2,6 +2,7 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:  # manual run; also runs the macOS job below
 jobs:
   python:
     runs-on: ubuntu-latest
@@ -33,6 +34,22 @@ jobs:
       - run: DDMA_NO_OPENMP=1 pip install -e ".[dev]"
       - run: python -c "import ddma.threads as t, sys; sys.exit(0 if not t.openmp_available() and t.get_num_threads() == 1 else 1)"
       - run: pytest -q tests/test_threads.py tests/test_partitioned.py tests/test_growth_cpp.py tests/test_bd_methods.py
+
+  macos-openmp:
+    # Apple's compiler with Homebrew's libomp. Run on demand only (Actions tab -> CI ->
+    # Run workflow): macOS minutes count 10x on private repositories.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: brew install libomp
+      - run: pip install -e ".[dev]"
+      - run: python -c "import ddma.threads as t, sys; print(t.openmp_available(), t.get_num_threads()); sys.exit(0 if t.openmp_available() else 1)"
+      - run: pytest -q tests/test_threads.py tests/test_partitioned.py tests/test_growth_cpp.py tests/test_bd_methods.py
+      - run: python benchmarks/kernels.py --repeat 2
 
   matlab-octave:
     runs-on: ubuntu-latest

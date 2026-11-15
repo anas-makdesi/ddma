@@ -27,9 +27,19 @@ ddma.set_num_threads();           % back to the default
 [n, openmp] = ddma.get_num_threads();
 ```
 
-OpenMP is optional. Where the compiler has no OpenMP (Apple clang without `libomp`), the
-kernel is built without it and runs on one thread, with the same results.
-`DDMA_NO_OPENMP=1 pip install .` forces such a build; in MATLAB, `build_mex(false)`.
+OpenMP is optional. Where the compiler has no OpenMP, the kernel is built without it and
+runs on one thread, with the same results. `DDMA_NO_OPENMP=1 pip install .` forces such a
+build; in MATLAB, `build_mex(false)`.
+
+**macOS.** Apple's compiler needs the OpenMP library from Homebrew. Install it once, then
+install ddma (or run `build_mex` in MATLAB):
+
+```
+brew install libomp
+pip install .        # finds libomp by itself; another folder: LIBOMP_PREFIX=/path pip install .
+```
+
+Without `libomp` the build still works, on one thread, and prints a note.
 
 ## How the kernels work (in short)
 
