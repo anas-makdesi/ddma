@@ -17,9 +17,12 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <limits>
+#include <optional>
 #include <type_traits>
 #include <vector>
 
@@ -98,6 +101,38 @@ inline void split_range(std::ptrdiff_t n, int parts, int t, std::ptrdiff_t& a,
   a = n * t / parts;
   b = n * (t + 1) / parts;
 }
+
+// Errors inside threads. A C++ exception (e.g. out of memory) cannot leave an OpenMP
+// thread: it would abort the whole program (Python or MATLAB). So each piece of work that
+// may fail runs through box.run(...): the first error is kept, the threads do no more work
+// but still pass every waiting point (otherwise the others would wait forever), and
+// box.rethrow() raises the error again once all threads are done.
+class ErrorBox {
+ public:
+  template <class F> void run(F&& f) {
+    if (failed()) return;
+    try {
+      f();
+    } catch (...) {
+      keep(std::current_exception());
+    }
+  }
+  bool failed() const { return flag_.load(std::memory_order_relaxed); }
+  void rethrow() const {
+    if (err_) std::rethrow_exception(err_);
+  }
+
+ private:
+  void keep(std::exception_ptr e) {
+#pragma omp critical(ddma_error_box)
+    {
+      if (!err_) err_ = e;
+    }
+    flag_.store(true);
+  }
+  std::exception_ptr err_;
+  std::atomic<bool> flag_{false};
+};
 
 // Fill a[0..n) with v, in parallel for big arrays.
 template <class T> inline void parallel_fill(T* a, std::ptrdiff_t n, T v) {
@@ -187,24 +222,26 @@ void minmax_scatter(std::ptrdiff_t K, std::ptrdiff_t N, T* up, T* lo, std::ptrdi
   //    then the copies are merged into the grid
   if (mode == SCATTER_PRIVATE) {
     const T INF = std::numeric_limits<T>::infinity();
+    // the copies are made before the threads start (an out-of-memory error stays normal)
     std::vector<std::vector<T>> cu(nt), cl(nt);
+    for (int t = 1; t < nt; ++t) {
+      cu[t].assign(N, INF);
+      cl[t].assign(N, -INF);
+    }
+    ErrorBox box;
 #pragma omp parallel num_threads(nt)
     {
       const int t = thread_id(), T_ = team_size();
-      T* pu = up;
-      T* pl = lo;
-      if (t > 0) {
-        cu[t].assign(N, INF);
-        cl[t].assign(N, -INF);
-        pu = cu[t].data();
-        pl = cl[t].data();
-      }
-      auto g = make_gen();
+      T* pu = t > 0 ? cu[t].data() : up;
+      T* pl = t > 0 ? cl[t].data() : lo;
       auto eu = [pu](std::ptrdiff_t i, T v) { pu[i] = std::min(pu[i], v); };
       auto el = [pl](std::ptrdiff_t i, T v) { pl[i] = std::max(pl[i], v); };
-      std::ptrdiff_t a, b;
-      split_range(K, T_, t, a, b);
-      for (std::ptrdiff_t k = a; k < b; ++k) g(k, eu, el);
+      box.run([&] {
+        auto g = make_gen();
+        std::ptrdiff_t a, b;
+        split_range(K, T_, t, a, b);
+        for (std::ptrdiff_t k = a; k < b; ++k) g(k, eu, el);
+      });
 #pragma omp barrier
       // merge: each thread owns a range of cells
       std::ptrdiff_t qa, qb;
@@ -218,6 +255,7 @@ void minmax_scatter(std::ptrdiff_t K, std::ptrdiff_t N, T* up, T* lo, std::ptrdi
         }
       }
     }
+    box.rethrow();
     return;
   }
 
@@ -234,26 +272,33 @@ void minmax_scatter(std::ptrdiff_t K, std::ptrdiff_t N, T* up, T* lo, std::ptrdi
       auto part_of = [&](std::ptrdiff_t i) {
         return std::ptrdiff_t(std::upper_bound(bound.begin(), bound.end(), i) - bound.begin()) - 1;
       };
-      const std::ptrdiff_t chunk = std::min(K, chunk_entries());  // points per round
+      const std::ptrdiff_t chunk = std::max<std::ptrdiff_t>(1, std::min(K, chunk_entries()));  // points per round
       std::vector<std::vector<std::vector<std::uint32_t>>> lists(
           nt, std::vector<std::vector<std::uint32_t>>(R));
+      ErrorBox box;
 #pragma omp parallel num_threads(nt)
       {
         const int t = thread_id(), T_ = team_size();
-        auto g = make_gen();
-        auto sp = make_span();
+        std::optional<decltype(make_gen())> g;
+        std::optional<decltype(make_span())> sp;
+        box.run([&] {
+          g.emplace(make_gen());
+          sp.emplace(make_span());
+        });
         for (std::ptrdiff_t k0 = 0; k0 < K; k0 += chunk) {
           const std::ptrdiff_t k1 = std::min(K, k0 + chunk);
-          std::ptrdiff_t a, b;
-          split_range(k1 - k0, T_, t, a, b);
-          for (auto& l : lists[t]) l.clear();
-          for (std::ptrdiff_t k = k0 + a; k < k0 + b; ++k) {
-            std::ptrdiff_t first, last;
-            sp(k, first, last);
-            const std::ptrdiff_t r1 = part_of(last);
-            for (std::ptrdiff_t r = part_of(first); r <= r1; ++r)
-              lists[t][r].push_back(std::uint32_t(k - k0));
-          }
+          box.run([&] {
+            std::ptrdiff_t a, b;
+            split_range(k1 - k0, T_, t, a, b);
+            for (auto& l : lists[t]) l.clear();
+            for (std::ptrdiff_t k = k0 + a; k < k0 + b; ++k) {
+              std::ptrdiff_t first, last;
+              (*sp)(k, first, last);
+              const std::ptrdiff_t r1 = part_of(last);
+              for (std::ptrdiff_t r = part_of(first); r <= r1; ++r)
+                lists[t][r].push_back(std::uint32_t(k - k0));
+            }
+          });
 #pragma omp barrier
 #pragma omp for schedule(dynamic, 1)
           for (std::ptrdiff_t r = 0; r < R; ++r) {
@@ -264,17 +309,20 @@ void minmax_scatter(std::ptrdiff_t K, std::ptrdiff_t N, T* up, T* lo, std::ptrdi
             auto el = [lo, qa, qb](std::ptrdiff_t i, T v) {
               if (i >= qa && i < qb) lo[i] = std::max(lo[i], v);
             };
-            for (int s = 0; s < T_; ++s)
-              for (auto k : lists[s][r]) g(k0 + k, eu, el);
+            box.run([&] {
+              for (int s = 0; s < T_; ++s)
+                for (auto k : lists[s][r]) (*g)(k0 + k, eu, el);
+            });
           }  // implicit barrier: lists can be reused
         }
       }
+      box.rethrow();
       return;
     }
   }
 
   // -- bucketed. The grid is cut into B blocks of 2^shift cells. Points are handled in
-  // rounds of about kChunkEntries values. In each round:
+  // rounds of about chunk_entries() values. In each round:
   //   (a) every thread computes the values of its share of the points (in a local list);
   //   (b) the values are sorted by block (a counting sort, stable);
   //   (c) the blocks are shared out among the threads; a block's values are written while
@@ -300,14 +348,18 @@ void minmax_scatter(std::ptrdiff_t K, std::ptrdiff_t N, T* up, T* lo, std::ptrdi
   val_u.resize(off_u.size());
   val_l.resize(off_u.size());
 
+  ErrorBox box;
 #pragma omp parallel num_threads(nt)
   {
     const int t = thread_id(), T_ = team_size();
-    auto g = make_gen();
+    std::optional<decltype(make_gen())> g;
     auto& LU = loc_u[t];
     auto& LL = loc_l[t];
-    LU.reserve(std::min(K, chunk) * per_point / T_ + per_point);
-    LL.reserve(LU.capacity());
+    box.run([&] {
+      g.emplace(make_gen());
+      LU.reserve(std::min(K, chunk) * per_point / T_ + per_point);
+      LL.reserve(LU.capacity());
+    });
     std::ptrdiff_t* cu = cnt_u.data() + std::size_t(t) * B;
     std::ptrdiff_t* cl = cnt_l.data() + std::size_t(t) * B;
     // values are listed and counted per block as they are emitted
@@ -328,7 +380,10 @@ void minmax_scatter(std::ptrdiff_t K, std::ptrdiff_t N, T* up, T* lo, std::ptrdi
       LL.clear();
       std::fill(cu, cu + B, 0);
       std::fill(cl, cl + B, 0);
-      for (std::ptrdiff_t k = k0 + a; k < k0 + b; ++k) g(k, eu, el);
+      // (a push_back that fails leaves the list and its counts consistent)
+      box.run([&] {
+        for (std::ptrdiff_t k = k0 + a; k < k0 + b; ++k) (*g)(k, eu, el);
+      });
 #pragma omp barrier
 #pragma omp single
       {
@@ -378,6 +433,7 @@ void minmax_scatter(std::ptrdiff_t K, std::ptrdiff_t N, T* up, T* lo, std::ptrdi
       }  // implicit barrier: the shared lists can be reused in the next round
     }
   }
+  box.rethrow();
 }
 
 // Run body(task) for task in [0, n_tasks), shared among the threads (static order of
@@ -385,8 +441,10 @@ void minmax_scatter(std::ptrdiff_t K, std::ptrdiff_t N, T* up, T* lo, std::ptrdi
 template <class F>
 inline void parallel_tasks(std::ptrdiff_t n_tasks, std::ptrdiff_t work, F body) {
   const int nt = (work > (std::ptrdiff_t(1) << 15) && n_tasks > 1) ? num_threads() : 1;
+  ErrorBox box;
 #pragma omp parallel for num_threads(nt) schedule(static)
-  for (std::ptrdiff_t t = 0; t < n_tasks; ++t) body(t);
+  for (std::ptrdiff_t t = 0; t < n_tasks; ++t) box.run([&] { body(t); });
+  box.rethrow();
 }
 
 }  // namespace ddma

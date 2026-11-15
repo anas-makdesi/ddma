@@ -199,7 +199,7 @@ PYBIND11_MODULE(_core, mod) {
   mod.def("openmp_available", &ddma::openmp_available, "Whether the kernel was built with OpenMP");
   mod.def("_set_scatter_mode", [](int m) { ddma::scatter_mode() = m; },
           "Internal (benchmarks/tests): 0 auto, 1 direct, 2 bucketed, 3 private");
-  mod.def("_set_chunk_entries", [](std::ptrdiff_t c) { ddma::chunk_entries() = c; },
+  mod.def("_set_chunk_entries", [](std::ptrdiff_t c) { ddma::chunk_entries() = c > 0 ? c : (std::ptrdiff_t(1) << 20); },
           "Internal (benchmarks/tests): values written per round in the bucketed mode");
   mod.def("growth_local", &growth_local, "Per-cell cone bounds, 'cell' or 'slab' (lo, up)",
           py::arg("Z"), py::arg("y"), py::arg("edges"), py::arg("g_lo"), py::arg("g_hi"),
