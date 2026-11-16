@@ -15,3 +15,7 @@ matlab/*.mexmaci64
 matlab/*.mexmaca64
 matlab/*.mexw64
 matlab/*.o
+docs/_build/
+docs/jupyter_execute/
+.jupyter_cache/
+docs/api/matlab.md

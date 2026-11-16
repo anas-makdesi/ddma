@@ -73,6 +73,8 @@ class SafetyFilterWrapper(gym.Wrapper):
         return self.controller.input_cells(self.state_fn(self.env)).size > 0
 
     def reset(self, **kwargs):
+        """Reset the environment; with ``reset_in_domain``, redraw until the state lies in
+        the controller domain."""
         obs, info = self.env.reset(**kwargs)
         if self.reset_in_domain:
             kwargs.pop("seed", None)  # later draws continue the seeded generator
@@ -96,6 +98,7 @@ class SafetyFilterWrapper(gym.Wrapper):
         return np.asarray(s, dtype=float), True
 
     def step(self, action):
+        """Filter the action (closest certified action), then step the environment."""
         u = np.asarray(action, dtype=float).ravel()
         s, inside = self.safe_action(u)
         corr = float(np.linalg.norm(s - u))
@@ -150,12 +153,15 @@ class CruiseControlEnv(gym.Env):
 
     @classmethod
     def speed_update(cls, v, u):
+        """The follower's speed update without disturbance (the dynamics the agent and
+        ddma do not know)."""
         return v + cls.T * (u - (cls.F0 + cls.F1 * v + cls.F2 * v**2) / cls.M)
 
     def _obs(self):
         return np.array([self.state[0], self.state[1], self._dh], dtype=np.float32)
 
     def reset(self, *, seed=None, options=None):
+        """Random initial state in [init_lo, init_hi] and a random leader phase."""
         super().reset(seed=seed)
         rng = self.np_random
         self.state = rng.uniform(self.init_lo, self.init_hi)
@@ -172,6 +178,7 @@ class CruiseControlEnv(gym.Env):
         return float(np.clip(base + self.np_random.uniform(-0.5, 0.5), *self.VL))
 
     def step(self, action):
+        """One step of 0.5 s; terminates with reward -50 when the state leaves the safe set."""
         u = float(np.clip(np.asarray(action, float).ravel()[0], -3.0, 3.0))
         h, v = self.state
         vl = self._leader_speed()

@@ -1,0 +1,4 @@
+/* wide tables (PARITY, method comparisons) scroll instead of squeezing */
+.table-wrapper { overflow-x: auto; }
+/* code cells of the tutorials: a bit tighter */
+div.cell_output .output { margin-top: 0.2rem; }

@@ -97,6 +97,7 @@ class GrowthMap(GrowthComponent):
         return self
 
     def copy(self) -> GrowthMap:
+        """An independent copy of the model."""
         out = GrowthMap(self.partition, self.g_lo, self.g_hi, self.d_lo, self.d_hi,
                         local=self.local, final=self.final, backend=self.backend)
         for a in ("v_upper", "v_lower", "lower", "upper"):
@@ -121,4 +122,5 @@ class GrowthMap(GrowthComponent):
         return self.lower - self.d_lo, self.upper - self.d_hi
 
     def widths(self) -> np.ndarray:
+        """upper - lower per cell (inf where unbounded)."""
         return self.upper - self.lower

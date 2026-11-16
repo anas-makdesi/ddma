@@ -190,6 +190,7 @@ class MonotoneEnvelope:
 
     @property
     def n_corners(self) -> int:
+        """Number of maximal corners."""
         return len(self.corners)
 
     def contains(self, x) -> np.ndarray:
@@ -396,13 +397,16 @@ class BoxEnvelope:
 
     @property
     def n_boxes(self) -> int:
+        """Number of certified boxes."""
         return len(self.lo)
 
     def boxes_containing(self, x) -> np.ndarray:
+        """Indices of the boxes that contain the state x."""
         x = np.asarray(x, float).reshape(-1)
         return np.flatnonzero(np.all((self.lo <= x) & (x <= self.hi), axis=1))
 
     def contains(self, x) -> np.ndarray:
+        """Boolean per state (rows of x): inside some certified box."""
         x = np.atleast_2d(np.asarray(x, float))
         out = np.zeros(len(x), bool)
         if self.n_boxes == 0:
@@ -425,6 +429,7 @@ class BoxEnvelope:
         return cand[np.argmin(np.sum((cand - ud) ** 2, axis=1))]
 
     def bounding_box(self):
+        """(lo, hi) of the smallest box containing every certified box."""
         return self.lo.min(axis=0), self.hi.max(axis=0)
 
 

@@ -91,22 +91,27 @@ class RectangularPartition:
     # ------------------------------------------------------------------ basic info
     @property
     def ndim(self) -> int:
+        """Number of coordinates."""
         return len(self.edges)
 
     @property
     def shape(self) -> tuple[int, ...]:
+        """Number of cells along each coordinate."""
         return tuple(e.size - 1 for e in self.edges)
 
     @property
     def n_cells(self) -> int:
+        """Total number of cells."""
         return int(np.prod(self.shape))
 
     @property
     def lo(self) -> np.ndarray:
+        """Lower corner of the partitioned box."""
         return np.array([e[0] for e in self.edges])
 
     @property
     def hi(self) -> np.ndarray:
+        """Upper corner of the partitioned box."""
         return np.array([e[-1] for e in self.edges])
 
     def project(self, dims: Sequence[int]) -> RectangularPartition:
@@ -114,6 +119,7 @@ class RectangularPartition:
         return RectangularPartition([self.edges[d] for d in dims])
 
     def same_as(self, other: RectangularPartition) -> bool:
+        """Whether both partitions have the same edges."""
         return self.ndim == other.ndim and all(
             a.shape == b.shape and np.array_equal(a, b) for a, b in zip(self.edges, other.edges)
         )
@@ -171,6 +177,7 @@ class RectangularPartition:
         return lo, hi
 
     def cell_centers(self, idx) -> np.ndarray:
+        """Centres of the cells with subscripts ``idx`` (K, n)."""
         lo, hi = self.cell_bounds(idx)
         return 0.5 * (lo + hi)
 

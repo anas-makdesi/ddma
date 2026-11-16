@@ -64,10 +64,12 @@ class MinimalSimulatingMap:
 
     @property
     def n(self) -> int:
+        """Input dimension."""
         return self.Z.shape[1]
 
     @property
     def m(self) -> int:
+        """Output dimension."""
         return self.Y.shape[1]
 
     @property

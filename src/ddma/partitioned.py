@@ -173,10 +173,12 @@ class PartitionedSimulatingMap:
     # ------------------------------------------------------------------ queries
     @property
     def m(self) -> int:
+        """Output dimension."""
         return self.lower.shape[-1]
 
     @property
     def n(self) -> int:
+        """Input dimension."""
         return self.partition.ndim
 
     def bounds_at(self, idx) -> tuple[np.ndarray, np.ndarray]:

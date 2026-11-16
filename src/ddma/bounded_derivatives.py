@@ -103,6 +103,7 @@ class BoundedDerivativeModel:
 
     @property
     def m(self) -> int:
+        """Number of outputs (the state dimension)."""
         return self.n_x
 
     @property
@@ -114,6 +115,7 @@ class BoundedDerivativeModel:
 
     @property
     def sigma_plus(self):
+        """Map of f+ (only when all outputs share one set of inputs)."""
         if self.components is not None or len(self.groups) != 1:
             raise AttributeError("only for method='two_matrix' with one feature group")
         return self.groups[0][3]

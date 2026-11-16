@@ -100,6 +100,7 @@ class Controller:
         return ok & (_bad_in_boxes(self._sat, first, last) == 0)
 
     def winning_fraction(self) -> float:
+        """Fraction of the state cells in the domain (winning set)."""
         return float(np.mean(self.domain))
 
     def domain_grid(self) -> np.ndarray:

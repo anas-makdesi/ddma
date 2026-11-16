@@ -381,10 +381,12 @@ class SymbolicAbstraction:
 
     @property
     def n_states(self) -> int:
+        """Number of state cells."""
         return self.X.n_cells
 
     @property
     def n_inputs(self) -> int:
+        """Number of input cells."""
         return self.U.n_cells
 
     def successors(self, q: int, p: int) -> np.ndarray:

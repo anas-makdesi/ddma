@@ -25,6 +25,26 @@ jobs:
       - name: gridless safe envelopes (examples)
         run: MPLBACKEND=Agg python examples/envelope_room_cooling.py 300 && MPLBACKEND=Agg python examples/envelope_nonlinear.py
 
+  docs:
+    # API reference + tutorials; the notebooks are executed, so a stale tutorial fails CI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[docs]"
+      - name: build the site (warnings are errors)
+        env:
+          DDMA_NB_EXECUTION: force
+          MPLBACKEND: Agg
+        run: sphinx-build -W --keep-going -b html docs docs/_build/html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ddma-docs-html
+          path: docs/_build/html
+          retention-days: 30
+
   python-no-openmp:
     # the kernel must also build and give the same results without OpenMP (e.g. Apple clang)
     runs-on: ubuntu-latest
@@ -70,3 +90,5 @@ jobs:
       - name: gridless safe envelopes (MATLAB tests against Python, examples)
         working-directory: matlab
         run: octave --no-gui --eval "addpath tests; run_invariance_tests; run examples/envelope_room_cooling; clear; run examples/envelope_nonlinear"
+      - name: MATLAB snippets of the documentation tutorials
+        run: python3 docs/check_matlab_snippets.py
