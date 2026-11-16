@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.12.0 (unreleased)
+
+**Assumption monitor** (`ddma.monitor`)
+- `AssumptionMonitor` checks new transitions online against the assumptions of a model: sign patterns, derivative bounds and disturbance bounds, all written as slope intervals plus a disturbance width. Each transition is checked against the stored data (the growth-cone consistency condition, so every alarm is a proof) and, through `for_model`, against the model's cell bounds. Works with `MinimalSimulatingMap`, `PartitionedSimulatingMap`, `GrowthMap` and `BoundedDerivativeModel` (all five methods).
+- `needed()`: for each assumption, the exact smallest change that alone makes all stored data consistent, or `nan` if that assumption cannot explain the violations. `report()` explains it in plain words.
+- Responses: `on_violation="alarm"` (callback), `"widen"` (smallest widening × (1 + `margin`), then refit from `data()`), `"fallback"` (latched flag). `max_points` keeps a random sample for cheaper checks.
+- MATLAB: `ddma.monitor`, `monitor_monotone`, `monitor_for_model`, `monitor_add`, `monitor_check`, `monitor_needed`, `monitor_widen`, `monitor_consistent`, `monitor_reset`, `monitor_report`; tested against Python.
+- Example `examples/assumption_monitor.py` (and `.m`): cruise control with a leader slower than assumed (widen: 54 → 3 steps outside the specification) and a trailer (fallback: 6 → 0). `docs/MONITOR.md`.
+
 ## 0.11.0 (16 November 2026)
 
 **Abstractions built in C++, on all cores**

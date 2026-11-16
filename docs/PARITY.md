@@ -46,6 +46,22 @@ The data of `bd_fit` are `Z = [X U]` and `Y = X' - g(X, U)`, as for `ddma.fit` (
 | `ddma.rl.SafetyFilterWrapper(env, controller, state_fn=, penalty=, reset_in_domain=)` (Gymnasium) | `ddma.safe_step(step, A, allowed, state_fcn, penalty)`, `ddma.safe_reset(reset, A, allowed, state_fcn)` (step/reset functions in the form of the RL Toolbox's `rlFunctionEnv`) | same safe actions (300 random states) |
 | `ddma.rl.CruiseControlEnv` | `matlab/examples/cruise_control_env.m` | same dynamics and reward |
 
+## Assumption monitor
+
+| Python | MATLAB | Tested against Python |
+|---|---|---|
+| `AssumptionMonitor(slope_lo, slope_hi, d_lo, d_hi, on_violation=, widen=, margin=, max_points=, callback=, tol=)` | `M = ddma.monitor(slope_lo, slope_hi, d_lo, d_hi, opts)` (same option names in a struct; `widen` = `{'slope_lo', i, j}`, 1-based) | — |
+| `AssumptionMonitor.monotone(signs, d_lo, d_hi, m=, n=)` | `ddma.monitor_monotone(signs, d_lo, d_hi, opts)` | — |
+| `AssumptionMonitor.for_model(model, Z, Y)` | `ddma.monitor_for_model(S, Z, Y, opts)` (S from `ddma.fit`, `ddma.bd_fit`, `ddma.growth_map`) | same slope intervals |
+| `.add(Z, Y)`, `.check(Z, Y)` → list of `Violation` | `ddma.monitor_add(M, Z, Y)`, `[M, viol] = ddma.monitor_check(M, Z, Y)` (struct array, indices 1-based) | same violations, gaps (≤ 1e-12) and witnesses |
+| `.observe(X, U, Xn)` (with `g=`, `features=`) | `ddma.monitor_check(M, Z, X' - g)` | — |
+| `.needed()` | `ddma.monitor_needed(M)` | ≤ 1e-12 |
+| `.widen(target)` | `ddma.monitor_widen(M, target)` | same widened bounds |
+| `.consistent()`, `.reset()`, `.report()` | `ddma.monitor_consistent(M)`, `ddma.monitor_reset(M)`, `ddma.monitor_report(M)` | same verdict |
+| `.data()`, `.ok`, `.fallback_active`, `.needs_refit`, `.set_model(...)` | `M.Z`, `M.Y`, `isempty(M.violating)`, `M.fallback_active`, `M.needs_refit`, `M.model = S` | — |
+
+Tests: `matlab/tests/run_monitor_tests.m` (reference written by `matlab/tests/make_reference_monitor.py`). With `max_points` the random sample of stored points differs between the languages.
+
 ## Safe envelopes (no grid)
 
 | Python | MATLAB | Tested against Python |

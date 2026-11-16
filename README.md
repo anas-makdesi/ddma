@@ -6,7 +6,7 @@
 
 > A. Makdesi, A. Girard, L. Fribourg. *Data-Driven Models of Monotone Systems.* IEEE Transactions on Automatic Control, 69, pp. 5294–5309, 2024. [doi:10.1109/TAC.2023.3346793](https://doi.org/10.1109/TAC.2023.3346793)
 
-and models of systems that are **not monotone but have bounded derivatives** (TAC 2024, Section III-C, and the five approaches of the PhD thesis, Chapter 3), with the symbolic abstractions and controller synthesis built on top of them (L4DC 2021, ADHS 2021), and **safe envelopes computed straight from data, without a grid** (IFAC World Congress 2026). More model classes are planned (see the roadmap).
+and models of systems that are **not monotone but have bounded derivatives** (TAC 2024, Section III-C, and the five approaches of the PhD thesis, Chapter 3), with the symbolic abstractions and controller synthesis built on top of them (L4DC 2021, ADHS 2021), and **safe envelopes computed straight from data, without a grid** (IFAC World Congress 2026). An **assumption monitor** checks online that new data still agree with the assumptions behind all of these guarantees. More model classes are planned (see the roadmap).
 
 **Python and MATLAB.** Both interfaces share one C++ core, they are tested against each other, and the experiments of the three papers and of the thesis chapter are reproduced (see [docs/REPRODUCTION.md](docs/REPRODUCTION.md)). Every feature is in both languages, and the MATLAB results are checked against Python's in CI: see [docs/PARITY.md](docs/PARITY.md) for the name of each function in each language.
 
@@ -125,6 +125,25 @@ Three rooms cooled by one input, unknown heat gains up to 0.15 °C per step, lim
 
 (`python examples/envelope_room_cooling.py`, `python examples/envelope_nonlinear.py`; MATLAB: `ddma.monotone_envelope`, `ddma.embedding_envelope`, examples of the same names. Details: [docs/INVARIANCE.md](docs/INVARIANCE.md).)
 
+## What if the assumptions are wrong?
+
+Every guarantee above holds *if* the system satisfies the assumptions given to the model: a monotonicity pattern, derivative bounds, disturbance bounds. `AssumptionMonitor` checks every new transition against them while the system runs. An alarm is a proof, not a heuristic: the transition is inconsistent with the data already seen under these assumptions. The monitor also computes, for each assumption, the **exact smallest change that alone would explain all the data**, and rules out those that cannot. Then it raises an alarm, widens the assumption (the model is refit, and its guarantee now rests on bounds fitted to the data), or switches to a fallback controller.
+
+```python
+from ddma import AssumptionMonitor
+mon = AssumptionMonitor.for_model(sigma, Z, Y, on_violation="fallback")  # any ddma model
+mon.check(z_new, y_new)       # every new transition; mon.observe(x, u, x_next) also works
+if mon.fallback_active:
+    u = backup(x)
+print(mon.report())           # which assumption, by how much, which ones are ruled out
+```
+
+In the cruise-control example the assumptions break mid-run. When the leader slows to 11 m/s (assumed ≥ 13), the monitor names the disturbance bound as the only possible cause, widens it and recomputes the safe set: 3 steps outside the specification instead of 54. When a trailer is hitched (30 % of the acceleration), the monitor switches to a backup controller at the first inconsistent transition: 0 steps outside the specification instead of 6.
+
+![Assumptions broken mid-run: alarm and response](docs/figures/monitor_cruise_control.png)
+
+(`python examples/assumption_monitor.py`; MATLAB: `ddma.monitor`, `ddma.monitor_check`, `run examples/assumption_monitor`. Details: [docs/MONITOR.md](docs/MONITOR.md).)
+
 ## Install
 
 **Python**
@@ -229,6 +248,7 @@ w.update(z_new[None], [y_new])   # one measurement at a time: about 0.1 ms on th
 | `SymbolicAbstraction` | finite abstraction of x⁺ ∈ f(x,u) + g(x,u) + D; successors stored as boxes of cells; `features=` for unknown parts that depend on a subset of (x, u) | L4DC 2021, ADHS 2021, TAC paper |
 | `ddma.rl.SafetyFilterWrapper`, `CruiseControlEnv` | certified safety filter around any Gymnasium environment (actions corrected to the nearest safe one; initial states redrawn into the controller's domain; optional penalty per correction); a cruise-control RL benchmark | |
 | `ddma.invariance`: `monotone_envelope`, `embedding_envelope` | safe envelopes (controlled invariant sets) from data without a grid: maximal corners of lower sets for monotone systems (layered search with dominance pruning + sort-filter skyline, equal to exhaustive enumeration); invariant boxes spanned by pairs of data points for systems with bounded Jacobians (the pair LP solved exactly in closed form); `contains`, `safe_input` | IFAC WC 2026 (Makdesi & Zamani; Makdesi, Zamani & Jafarpour) |
+| `AssumptionMonitor` | online check of new transitions against the model's signs, derivative bounds and disturbance bounds (stored data + the model's cell bounds); exact smallest single change of each assumption that explains the data; responses alarm / widen / fallback; plain-words `report()` | this package |
 | `safety`, `reach_avoid` | maximal controlled invariant set; reach-avoid with step counts. Exact fixed points in the C++ core: summed-area tables check a successor box in O(2^n); in `safety` each state keeps a pointer to its first input not yet ruled out, so every state–input pair is examined at most once over the whole fixed point; `reach_avoid` re-examines a state only when its successor hull gained a winning cell | standard fixed points |
 | `SymbolicAbstraction(..., lazy=True)` | no transitions stored: `safety` evaluates a transition only when its scan reaches it (states outside the safe set are never expanded, each state stops at its first good input). Memory O(\|Q\|) instead of O(\|Q\|·\|P\|); the controller computes its allowed inputs on demand. Same winning set | standard fixed point, transitions computed on demand |
 | `Controller` | concrete inputs (`pick=`), **safety filter** (`filter`), closed-loop `simulate` | |
@@ -263,6 +283,7 @@ The Python tests are in `tests/` and run in under a minute with `pytest`. They c
 - **Original implementation**: the grid algorithm reproduces the original MATLAB implementation (`Data2Sigma0` + `ApproximationMonotoneSystemData3`) bit for bit on random problems.
 - **Backends and languages**: the C++ and NumPy backends are bit-identical. The MATLAB code, both pure `.m` and MEX, reproduces the Python results exactly (map, abstraction, safety, reach-avoid; the five bounded-derivative models to within 1e-15, and their online updates), and the MEX fixed points equal the `.m` ones on random 1-D to 3-D abstractions. It has been run in MATLAB (MATLAB Online: tests, examples and figures) and CI runs it under Octave.
 - **Safe envelopes**: the monotone search equals brute-force enumeration; the closed-form pair bound equals an LP solver; every certified corner or box is pushed through the true dynamics with random inputs and worst-case disturbances, and closed loops from thousands of certified states never leave the envelope (Python and MATLAB, MATLAB checked against Python).
+- **Assumption monitor**: correct assumptions never raise an alarm (all model types and methods); a wrong sign, a too-small derivative bound, a missing dependence and a larger disturbance are each detected, and the computed smallest change matches the true value; it is exact (equal to bisection with a full consistency check, and to brute force over all pairs); after widening, all data are consistent and the refit model contains them.
 - **Threads**: every learning kernel gives the same bits with 1, 2 and all threads and with every way of sharing the work among them, in Python and MATLAB, and the same bits as the earlier single-threaded kernels. The compiled abstraction equals the NumPy and `.m` code on every kind of model, `g`, assumption and partition, for any number of threads. CI builds with and without OpenMP (on demand also on macOS and Windows).
 - **Closed loop**: simulated trajectories under the synthesized controllers and the safety filter never leave the safe set and always reach the target.
 
