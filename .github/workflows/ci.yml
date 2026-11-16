@@ -20,6 +20,8 @@ jobs:
       - run: ruff check .
       - run: pytest -q
       - run: MPLBACKEND=Agg python examples/scalar_map.py && MPLBACKEND=Agg python examples/adaptive_cruise_control.py && python examples/lazy_synthesis.py 30
+      - name: assumption monitor (example)
+        run: python examples/assumption_monitor.py 50000 --no-plot
       - name: gridless safe envelopes (examples)
         run: MPLBACKEND=Agg python examples/envelope_room_cooling.py 300 && MPLBACKEND=Agg python examples/envelope_nonlinear.py
 
@@ -64,7 +66,7 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends octave octave-dev
       - name: build MEX and run the MATLAB tests (against Python reference results)
         working-directory: matlab
-        run: octave --no-gui --eval "build_mex; addpath tests; run_tests; run_threads_tests; run_abstraction_tests; run examples/acc_safety_filter; clear; run examples/pendulum_bounded_derivatives; clear; run examples/online_refinement; clear; run examples/scalar_map; clear; run examples/bounded_derivative_map; clear; K = 20; run examples/lazy_synthesis; clear; run examples/rl_safety_filter"
+        run: octave --no-gui --eval "build_mex; addpath tests; run_tests; run_threads_tests; run_abstraction_tests; run_monitor_tests; run examples/acc_safety_filter; clear; run examples/assumption_monitor; clear; run examples/pendulum_bounded_derivatives; clear; run examples/online_refinement; clear; run examples/scalar_map; clear; run examples/bounded_derivative_map; clear; K = 20; run examples/lazy_synthesis; clear; run examples/rl_safety_filter"
       - name: gridless safe envelopes (MATLAB tests against Python, examples)
         working-directory: matlab
         run: octave --no-gui --eval "addpath tests; run_invariance_tests; run examples/envelope_room_cooling; clear; run examples/envelope_nonlinear"
