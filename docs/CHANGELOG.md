@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.12.0 (unreleased)
+## 0.12.0 (18 November 2026)
 
 **Assumption monitor** (`ddma.monitor`)
 - `check_data` checks every pair of the learning data against the assumptions before learning (no model needed): conflicting pairs per output, worst pair, conflicts per point (`suspects()` finds corrupted readings) and the same diagnosis as the monitor. Exact, in the C++ core on all cores (200,000 points in about 1–2 s on two cores).
