@@ -45,3 +45,5 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B"]
+# zip(strict=) exists from Python 3.10; adding it everywhere would change behaviour (B905)
+ignore = ["B905"]

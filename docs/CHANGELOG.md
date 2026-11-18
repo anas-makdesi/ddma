@@ -13,6 +13,9 @@
 - MATLAB: `ddma.check_data`, `ddma.monitor`, `monitor_monotone`, `monitor_for_model`, `monitor_add`, `monitor_check`, `monitor_flush`, `monitor_status`, `monitor_data`, `monitor_quarantine`, `monitor_needed`, `monitor_widen`, `monitor_consistent`, `monitor_reset`, `monitor_report`, `monitor_rebuild_index`; MEX `ddma_monitor_mex`; tested against Python (same random samples).
 - Example `examples/assumption_monitor.py` (and `.m`): cruise control; the learning data are checked first, then a leader slower than assumed (widened within the limit: 54 → 3 steps outside the specification) and a trailer (beyond the limit, fallback: 6 → 0). `benchmarks/monitor.py`, `docs/MONITOR.md` with the timings.
 
+**Requirements**
+- Python 3.10 or newer (3.9 reached end of life in October 2025). CI tests 3.10, 3.12 and 3.13 on the current Ubuntu runner.
+
 ## 0.11.0 (16 November 2026)
 
 **Abstractions built in C++, on all cores**
