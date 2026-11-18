@@ -139,7 +139,7 @@ jobs:
       - name: build the MEX files and run the MATLAB tests
         uses: matlab-actions/run-command@v3
         with:
-          command: cd matlab; build_mex; addpath tests; run_tests; run_threads_tests; run_abstraction_tests; run_monitor_tests; run_invariance_tests
+          command: fprintf('cores %d, OMP_NUM_THREADS="%s", maxNumCompThreads %d\n', feature('numcores'), getenv('OMP_NUM_THREADS'), maxNumCompThreads); cd matlab; build_mex; addpath tests; run_tests; run_threads_tests; run_abstraction_tests; run_monitor_tests; run_invariance_tests
       - name: "macOS: put libomp next to the MEX files"
         if: runner.os == 'macOS'
         working-directory: matlab
