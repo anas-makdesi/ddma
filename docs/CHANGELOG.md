@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (0.12.1)
+## 0.12.1 (19 November 2026)
 
 The toolbox code is the same as 0.12.0; this release adds ready-made packages and the documentation site.
 
