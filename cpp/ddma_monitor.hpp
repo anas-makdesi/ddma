@@ -441,6 +441,7 @@ inline FullOut check_full(const Spec& s, const View& v, const std::uint8_t* stat
   {
     const int t = thread_id();
     std::vector<double> zq(n), yq(m), du(n), a(n), b(n);
+    idx_t my_pairs = 0;  // local: neighbouring counters of other threads would share a cache line
 #pragma omp for schedule(dynamic, 1)
     for (idx_t it = 0; it < items; ++it) {
       err.run([&] {
@@ -448,7 +449,7 @@ inline FullOut check_full(const Spec& s, const View& v, const std::uint8_t* stat
         load_point(v, q, n, m, zq.data(), yq.data());
         Worst* w = &worsts[t][std::size_t(q - first) * m];
         auto pair = [&](idx_t k) {
-          ++pairs[t];
+          ++my_pairs;
           eval_pair(s, zq.data(), yq.data(), v, k, needs[t], du.data(), [&](int i, double g) {
             if (k < first) {
               if (!status || status[k] == 0) w[i].offer(g, k);
@@ -472,6 +473,7 @@ inline FullOut check_full(const Spec& s, const View& v, const std::uint8_t* stat
         }
       });
     }
+    pairs[t] = my_pairs;
   }
   err.rethrow();
   for (int t = 0; t < nt; ++t) {
@@ -536,9 +538,12 @@ inline AllOut check_all(const Spec& s, const View& v, bool prune) {
     for (idx_t c = 0; c < C; ++c) start[c + 1] += start[c];
     std::vector<idx_t> pos(start.begin(), start.end() - 1);
     for (idx_t k = 0; k < K; ++k) order[pos[G.cell[k]]++] = k;  // stable: increasing k
-  } else {
+  } else {  // no grid: blocks of consecutive points, so that threads share the work
     for (idx_t k = 0; k < K; ++k) order[k] = k;
-    start = {0, K};
+    const idx_t bs = 1024;
+    C = (K + bs - 1) / bs;
+    start.resize(C + 1);
+    for (idx_t c = 0; c <= C; ++c) start[c] = std::min(K, c * bs);
   }
   std::vector<double> Zs(std::size_t(K) * n), Ys(std::size_t(K) * m);
   for (idx_t r = 0; r < K; ++r) {
@@ -551,6 +556,10 @@ inline AllOut check_all(const Spec& s, const View& v, bool prune) {
     if (start[c + 1] > start[c]) cells.push_back(c);
   const idx_t NC = idx_t(cells.size());
 
+  // Each pair is evaluated with the point of the outer loop as q. This is exact whichever
+  // point plays q: swapping the two points only negates each difference (exact in floating
+  // point), so "a above b" gives the same bits from either side. Witnesses and ties use the
+  // original indices (later, earlier).
   const int nt = double(K) * double(K) > double(1 << 18) ? num_threads() : 1;
   std::vector<Need> needs(nt, Need(m, n));
   std::vector<std::vector<WorstPair>> worsts(nt, std::vector<WorstPair>(m));
@@ -561,6 +570,10 @@ inline AllOut check_all(const Spec& s, const View& v, bool prune) {
   {
     const int t = thread_id();
     std::vector<double> du(n), a(n), b(n), zq(n), yq(m);
+    std::vector<idx_t> cnt(m, 0);
+    std::vector<WorstPair> wst(m);
+    Need nd(m, n);
+    idx_t my_pairs = 0;
 #pragma omp for schedule(dynamic, 1)
     for (idx_t ia = 0; ia < NC; ++ia) {
       err.run([&] {
@@ -574,26 +587,22 @@ inline AllOut check_all(const Spec& s, const View& v, bool prune) {
           for (idx_t ra = start[A]; ra < start[A + 1]; ++ra) {
             const idx_t rb0 = (A == B) ? ra + 1 : start[B];
             if (rb0 >= start[B + 1]) continue;
-            if (prune && A != B) {
-              load_point(sv, ra, n, m, zq.data(), yq.data());
-              if (!point_box(s, zq.data(), yq.data(), &G.zlo[B * n], &G.zhi[B * n],
-                             &G.ylo[B * m], &G.yhi[B * m], a.data(), b.data()))
-                continue;
-            }
+            load_point(sv, ra, n, m, zq.data(), yq.data());
+            if (prune && A != B &&
+                !point_box(s, zq.data(), yq.data(), &G.zlo[B * n], &G.zhi[B * n],
+                           &G.ylo[B * m], &G.yhi[B * m], a.data(), b.data()))
+              continue;
+            const idx_t ka = order[ra];
             for (idx_t rb = rb0; rb < start[B + 1]; ++rb) {
-              // the later point (larger original index) plays q
-              const idx_t ka = order[ra], kb = order[rb];
-              const idx_t rq = ka > kb ? ra : rb, rk = ka > kb ? rb : ra;
+              const idx_t kb = order[rb];
               const idx_t kq = std::max(ka, kb), kk = std::min(ka, kb);
-              load_point(sv, rq, n, m, zq.data(), yq.data());
-              ++pairs[t];
+              ++my_pairs;
               bool any = false;
-              eval_pair(s, zq.data(), yq.data(), sv, rk, needs[t], du.data(),
-                        [&](int i, double g) {
-                          any = true;
-                          ++counts[t][i];
-                          worsts[t][i].offer(g, kq, kk);
-                        });
+              eval_pair(s, zq.data(), yq.data(), sv, rb, nd, du.data(), [&](int i, double g) {
+                any = true;
+                ++cnt[i];
+                wst[i].offer(g, kq, kk);
+              });
               if (any) {
 #pragma omp atomic
                 ++out.conflicts[kq];
@@ -605,6 +614,10 @@ inline AllOut check_all(const Spec& s, const View& v, bool prune) {
         }
       });
     }
+    needs[t] = nd;
+    worsts[t] = wst;
+    counts[t] = cnt;
+    pairs[t] = my_pairs;
   }
   err.rethrow();
   for (int t = 0; t < nt; ++t) {

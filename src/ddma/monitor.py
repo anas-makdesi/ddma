@@ -528,19 +528,24 @@ class AssumptionMonitor:
                 "cells": int(self._grid[7].size) if self._grid is not None else 0}
 
     # ------------------------------------------------------------------ storage
+    def _reserve(self, cap):
+        """Storage for at least ``cap`` points (copies once if it must grow)."""
+        if cap <= self._Zb.shape[0]:
+            return
+        for name in ("_Zb", "_Yb", "_ib", "_st"):
+            old = getattr(self, name)
+            new = np.zeros((cap,) + old.shape[1:], old.dtype)
+            new[: self._K] = old[: self._K]
+            setattr(self, name, new)
+        if self._grid is not None:
+            nxt = np.full(cap, -1, np.int64)
+            nxt[: self._K] = self._grid[9][: self._K]
+            self._grid = self._grid[:9] + (nxt,)
+
     def _append(self, Z, Y, ids, status):
         k = Z.shape[0]
         if self._K + k > self._Zb.shape[0]:
-            cap = max(2 * self._Zb.shape[0], self._K + k)
-            for name in ("_Zb", "_Yb", "_ib", "_st"):
-                old = getattr(self, name)
-                new = np.zeros((cap,) + old.shape[1:], old.dtype)
-                new[: self._K] = old[: self._K]
-                setattr(self, name, new)
-            if self._grid is not None:
-                nxt = np.full(cap, -1, np.int64)
-                nxt[: self._K] = self._grid[9][: self._K]
-                self._grid = self._grid[:9] + (nxt,)
+            self._reserve(max(2 * self._Zb.shape[0], self._K + k))
         a, b = self._K, self._K + k
         self._Zb[a:b], self._Yb[a:b], self._ib[a:b], self._st[a:b] = Z, Y, ids, status
         self._K = b
@@ -577,11 +582,15 @@ class AssumptionMonitor:
 
     def add(self, Z, Y):
         """Store data without checking them (e.g. the data the model was learned from;
-        check those with :func:`check_data`). Pending full checks are run first."""
+        check those with :func:`check_data`). Pending full checks are run first. Room is
+        reserved for at least half as many new points, so a run does not trigger a copy."""
         Z, Y = self._as_data(Z, Y)
         if self.pending:
             self.flush()
         k = Z.shape[0]
+        # room for at least half as many new points: no copy (time spike) during a run
+        K2 = self._K + k
+        self._reserve(K2 + max(4096, K2 // 2))
         self._append(Z, Y, -(self._n_seed + 1 + np.arange(k)), 0)
         self._n_seed += k
         self._pending_from = self._K

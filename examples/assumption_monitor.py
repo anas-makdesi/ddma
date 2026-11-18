@@ -3,20 +3,24 @@
 The safety filter of examples/adaptive_cruise_control.py is learned from data under two
 assumptions: the speed update is monotone in (v, u), and the disturbance stays within
 known bounds (leader speed in [13, 17] m/s, noise within 0.05). Its guarantee holds only
-while they do. Two things go wrong mid-run (t = 75 s), each in its own scenario:
+while they do. Before learning, ddma.check_data checks every pair of the learning data against these
+assumptions. Then two things go wrong mid-run (t = 75 s), each in its own scenario, with
+the same response, "widen_then_fallback" (limit: twice the original disturbance width):
 
   A. the leader slows down to 11 m/s, below the assumed 13 m/s: a disturbance bound is
-     wrong. Response "widen": the bound is widened just enough to explain all data seen,
-     the map and the safe set are recomputed, and the run goes on with the new set.
+     wrong. The needed width stays under the limit, so the bound is widened just enough to
+     explain all data seen, the map and the safe set are recomputed, and the run goes on.
   B. a trailer is hitched: the car achieves 30 % of the commanded acceleration and has
-     twice the drag, so the learned map no longer describes the plant. Response "fallback":
-     at the first inconsistent transition the car switches to a conservative controller.
+     twice the drag, so the learned map no longer describes the plant. The needed width is
+     3 times the original, beyond the limit: the car switches to a conservative controller.
 
 Each scenario also runs without a monitor: the filter keeps trusting its model until the
 state leaves the certified domain. In all runs the backup controller takes over outside
-the domain (the guarantee is gone there anyway).
+the domain (the guarantee is gone there anyway); after a refit the domain is smaller, and
+the same rule applies: outside the new safe set, use the backup controller.
 Every alarm is a proof: the new transition cannot come from a monotone map with the
-assumed disturbance bounds, given the data already seen.
+assumed disturbance bounds, given the data already seen. The example prints which level
+of the monitor caught it (cells, sample or full check) and when.
 
 Run:  python examples/assumption_monitor.py   (writes docs/figures/monitor_*.png)
 """
@@ -29,6 +33,7 @@ import numpy as np
 
 from ddma import (
     AssumptionMonitor,
+    check_data,
     PartitionedSimulatingMap,
     RectangularPartition,
     SymbolicAbstraction,
@@ -105,23 +110,26 @@ def leader_profile(scenario, seed=1):
 
 
 def run(ctrl, sigma, Zd, Y, scenario, mode, seed=2):
-    """scenario: "slow leader" or "trailer"; mode: "none", "widen" or "fallback"."""
+    """scenario: "slow leader" or "trailer"; mode: "none" or "monitor"."""
     rng = np.random.default_rng(seed)
     vl = leader_profile(scenario)
     trailer = scenario == "trailer"
-    mon, first = None, []
+    mon, first, seen = None, [], []
 
-    def at_first_alarm(viols):  # called before the response: the diagnosis at that moment
+    def on_alarm(viols):  # called before the response: the diagnosis at that moment
+        seen.extend(viols)
         if not first:
             first.append(mon.report())
 
     if mode != "none":
         mon = AssumptionMonitor.for_model(
-            sigma, Zd, Y, g=g, features=FEATS, on_violation=mode, margin=0.2,
-            callback=at_first_alarm, input_names=["v", "u"],
+            sigma, Zd, Y, g=g, features=FEATS, on_violation="widen_then_fallback",
+            widen_limit=2.0, margin=0.2, callback=on_alarm, input_names=["v", "u"],
             output_names=["gap update", "speed update"])
     x = x_prev = np.array([30.0, 15.0])
-    xs, us, ev = [x], [], {"alarm": None, "refits": [], "outside": None, "first": first}
+    xs, us = [x], []
+    ev = {"alarm": None, "refits": [], "outside": None, "first": first, "seen": seen,
+          "t_check": []}
     for k in range(N):
         if mon is not None and mon.fallback_active:
             u = fallback(x, x_prev)
@@ -132,9 +140,12 @@ def run(ctrl, sigma, Zd, Y, scenario, mode, seed=2):
                 u = fallback(x, x_prev)
         xn = plant_step(x, u, rng, vl[k], trailer=trailer and k >= K_EVENT)
         if mon is not None:
-            if mon.observe(x[None], np.atleast_1d(u)[None], xn[None]) and ev["alarm"] is None:
+            t0 = time.perf_counter()
+            found = mon.observe(x[None], np.atleast_1d(u)[None], xn[None])
+            ev["t_check"].append(time.perf_counter() - t0)
+            if found and ev["alarm"] is None:
                 ev["alarm"] = k
-            if mon.needs_refit:  # "widen": refit on all data with the widened bounds
+            if mon.needs_refit:  # widened: refit on all data with the widened bounds
                 Zs, Ys = mon.data()
                 sigma, ctrl = synthesize(Zs, Ys, mon.d_lo, mon.d_hi)
                 mon.set_model(sigma.bounds, sigma.partition.contains)
@@ -142,6 +153,7 @@ def run(ctrl, sigma, Zd, Y, scenario, mode, seed=2):
         x_prev, x = x, xn
         xs.append(x)
         us.append(np.atleast_1d(u))
+    ev["fell"] = mon is not None and mon.fallback_active
     return np.array(xs), np.array(us), ev, mon
 
 
@@ -153,20 +165,23 @@ def main(n_samples=200_000):
     Zd, Y = transitions_to_data(X, U, Xn, g)
     Zd = Zd[:, FEATS]
     t0 = time.perf_counter()
+    chk = check_data(Zd, Y, d_lo=D_LO, d_hi=D_HI, signs=SIGNS, input_names=["v", "u"],
+                     output_names=["gap update", "speed update"])
+    print(f"learning data checked ({n_samples:,} points, every pair) in "
+          f"{time.perf_counter() - t0:.2f} s: {chk.report()}")
+    t0 = time.perf_counter()
     sigma, ctrl = synthesize(Zd, Y, D_LO, D_HI)
     print(f"learned from {n_samples:,} transitions in {time.perf_counter() - t0:.2f} s; "
           f"certified safe set: {100 * safe_fraction(ctrl):.0f} % of the specification")
 
-    # the monitor keeps a random sample of 20,000 of the learning data (fast checks)
-    sub = np.random.default_rng(3).choice(n_samples, min(n_samples, 20_000), replace=False)
     results = {}
-    for scenario, response in (("slow leader", "widen"), ("trailer", "fallback")):
-        for mode in ("none", response):
+    for scenario in ("slow leader", "trailer"):
+        for mode in ("none", "monitor"):
             t0 = time.perf_counter()
-            xs, us, ev, mon = run(ctrl, sigma, Zd[sub], Y[sub], scenario, mode)
+            xs, us, ev, mon = run(ctrl, sigma, Zd, Y, scenario, mode)
             bad = np.flatnonzero(np.any((xs < SAFE_LO) | (xs > SAFE_HI), axis=1))
             results[scenario, mode] = (xs, us, ev, bad)
-            print(f"\n--- {scenario}, {'no monitor' if mode == 'none' else 'monitor: ' + mode}"
+            print(f"\n--- {scenario}, {'no monitor' if mode == 'none' else 'monitor'}"
                   f" ({time.perf_counter() - t0:.1f} s): min gap {xs[:, 0].min():.1f} m, "
                   + (f"outside the specification for {bad.size} steps (first at t = "
                      f"{bad[0] * T:.1f} s)" if bad.size else "specification never violated"))
@@ -178,6 +193,15 @@ def main(n_samples=200_000):
             for k, frac in ev["refits"]:
                 print(f"  refit at t = {k * T:.1f} s: certified safe set {100 * frac:.0f} %")
             if mon is not None:
+                tc = 1e3 * np.array(ev["t_check"])
+                print(f"monitor check per step (all {mon.n_points - N:,} learning points + run): "
+                      f"median {np.median(tc):.3f} ms, max {tc.max():.2f} ms")
+                print("caught by (level, transition, found at):")
+                for v in ev["seen"][:6]:
+                    print(f"  {v.level:6s} t = {v.index * T:5.1f} s ({mon._out(v.output)}), "
+                          f"found {v.found_at - v.index} steps later, gap {v.gap:.3g}")
+                if len(ev["seen"]) > 6:
+                    print(f"  ... {len(ev['seen']) - 6} more")
                 print("At the first alarm:\n" + ev["first"][0])
                 print("At the end:\n" + mon.report())
     if "--no-plot" not in sys.argv:
@@ -199,7 +223,8 @@ def plot(results):
             if sc != scenario:
                 continue
             c = "#e76f51" if mode == "none" else "#264653"
-            lab = "no monitor" if mode == "none" else f"monitor → {mode}"
+            lab = "no monitor" if mode == "none" else ("monitor → fallback" if ev["fell"]
+                                                       else "monitor → widen + refit")
             ax.plot(t[: len(xs)], xs[:, 0], color=c, lw=1.3, label=lab)
             if ev["alarm"] is not None:
                 ax.axvline(ev["alarm"] * T, color=c, ls=":", lw=1.2)

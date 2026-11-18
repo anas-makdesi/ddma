@@ -1,13 +1,16 @@
 %ASSUMPTION_MONITOR What if the assumptions are wrong? (MATLAB/Octave)
 %   Same scenarios as examples/assumption_monitor.py. The cruise-control safety filter of
 %   acc_safety_filter.m assumes a speed update monotone in (v, u) and a leader speed in
-%   [13, 17] m/s. At t = 75 s:
-%     A. the leader slows down to 11 m/s (a disturbance bound is wrong): the monitor
-%        widens the bound, the map and the safe set are recomputed;
-%     B. a trailer is hitched (30 % of the acceleration, twice the drag): the monitor
-%        switches to a backup controller.
+%   [13, 17] m/s. ddma.check_data first checks every pair of the learning data. At
+%   t = 75 s, with the response 'widen_then_fallback' (limit: 2 x the original width):
+%     A. the leader slows down to 11 m/s (a disturbance bound is wrong): the needed width
+%        stays under the limit, so the monitor widens the bound, and the map and the safe
+%        set are recomputed;
+%     B. a trailer is hitched (30 % of the acceleration, twice the drag): the needed width
+%        is beyond the limit, so the monitor switches to a backup controller.
 %   Without a monitor the filter trusts its model until the state leaves the certified
-%   domain; outside it, every run uses the backup. Run from the matlab/ folder:
+%   domain; outside it (also outside a refit, smaller, safe set), every run uses the
+%   backup. The output shows which level caught each event. Run from the matlab/ folder:
 %   run examples/assumption_monitor
 addpath(fullfile(fileparts(mfilename('fullpath')), '..'));   % the +ddma package
 T = 0.5; Mv = 1370; f0 = 51; f1 = 1.2567; f2 = 0.4342;
@@ -28,6 +31,8 @@ X = Xlo + rand(K, 2) .* (Xhi - Xlo);
 U = Ulo + rand(K, 1) * (Uhi - Ulo);
 Y = [T * (VL(1) + rand(K, 1) * diff(VL)), X(:, 2) + T * (U - drag(X(:, 2))) + W * (2 * rand(K, 1) - 1)];   % y = x' - g(x)
 Z = [X(:, 2) U];
+R = ddma.check_data(Z, Y, [], [], [T * VL(1), -W], [T * VL(2), W], struct('signs', SIGNS));
+disp(R.report)
 S = ddma.fit(Z, Y, {Xedges{2}, Uedges{1}}, [T * VL(1), -W], [T * VL(2), W], SIGNS);
 A = ddma.abstraction(Xedges, Uedges, S, ddma.affine_bounds(A_G), features);
 [domain, allowed] = ddma.safety(A, safe);
@@ -36,8 +41,7 @@ fprintf('certified safe set: %.0f%% of the specification\n', 100 * nnz(domain) /
 N = 500; KE = 150;
 nominal = @(x) min(max(0.3 * (22 - x(2)), Ulo), Uhi);
 backup = @(x, xp) min(max(1.5 * (xp(2) + (x(1) - xp(1)) / T - x(2)) + 0.2 * (x(1) - 30), Ulo), Uhi);
-sub = 1:5000;                            % the monitor keeps 5,000 of the learning data
-scen = {'slow leader', 'trailer'}; resp = {'widen', 'fallback'};
+scen = {'slow leader', 'trailer'};
 for s = 1:2
     ddma.seed(1);
     slow = 13 * ones(1, N); if s == 1, slow(KE+1:end) = 11; end
@@ -47,9 +51,9 @@ for s = 1:2
         ddma.seed(2);
         As = A; al = allowed;
         if withMon
-            Mon = ddma.monitor_for_model(S, Z(sub, :), Y(sub, :), ...
-                struct('on_violation', resp{s}, 'margin', 0.2, 'input_names', {{'v', 'u'}}, ...
-                       'output_names', {{'gap update', 'speed update'}}));
+            Mon = ddma.monitor_for_model(S, Z, Y, ...
+                struct('on_violation', 'widen_then_fallback', 'widen_limit', 2, 'margin', 0.2, ...
+                       'input_names', {{'v', 'u'}}, 'output_names', {{'gap update', 'speed update'}}));
         end
         x = [30 15]; xp = x; nbad = 0; alarm = NaN; worst = inf;
         for k = 1:N
@@ -65,8 +69,9 @@ for s = 1:2
             if withMon
                 [Mon, v] = ddma.monitor_check(Mon, [x(2) u], xn - x * A_G');
                 if ~isempty(v) && isnan(alarm), alarm = k; end
-                if Mon.needs_refit             % widen: refit on all stored data
-                    S2 = ddma.fit(Mon.Z, Mon.Y, {Xedges{2}, Uedges{1}}, Mon.d_lo, Mon.d_hi, SIGNS);
+                if Mon.needs_refit             % widened: refit on all stored data
+                    [Zs, Ys] = ddma.monitor_data(Mon);
+                    S2 = ddma.fit(Zs, Ys, {Xedges{2}, Uedges{1}}, Mon.d_lo, Mon.d_hi, SIGNS);
                     As = ddma.abstraction(Xedges, Uedges, S2, ddma.affine_bounds(A_G), features);
                     [dom2, al] = ddma.safety(As, safe);
                     Mon.model = S2; Mon.needs_refit = false;
@@ -77,12 +82,13 @@ for s = 1:2
             xp = x; x = xn; worst = min(worst, x(1));
             nbad = nbad + any(x < SAFE_LO | x > SAFE_HI);
         end
-        if withMon, name = ['monitor: ' resp{s}]; else, name = 'no monitor'; end
+        if withMon, name = 'monitor'; else, name = 'no monitor'; end
         fprintf('--- %s, %s: min gap %.1f m, %d steps outside the specification\n', ...
                 scen{s}, name, worst, nbad);
         if withMon
-            fprintf('first alarm at t = %.1f s (event at t = %.1f s)\n%s\n', (alarm - 1) * T, KE * T, ...
-                    ddma.monitor_report(Mon));
+            V = Mon.violations;
+            fprintf('first alarm at t = %.1f s (event at t = %.1f s), caught by level ''%s''\n%s\n', ...
+                    (alarm - 1) * T, KE * T, V(1).level, ddma.monitor_report(Mon));
         end
     end
 end
