@@ -7,7 +7,7 @@ name = "ddma"
 version = "0.12.0"
 description = "Data-driven models and abstractions with guarantees: models of monotone systems and systems with bounded derivatives, symbolic abstractions and correct-by-construction controllers from data."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [
   { name = "Anas Makdesi" },
@@ -41,7 +41,7 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 src = ["src"]
-target-version = "py39"
+target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B"]

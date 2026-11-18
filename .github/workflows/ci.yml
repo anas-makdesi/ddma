@@ -5,10 +5,10 @@ on:
   workflow_dispatch:  # manual run; also runs the macOS job below
 jobs:
   python:
-    runs-on: ubuntu-24.04  # ubuntu-latest moved to 26.04 (no Python 3.9)
+    runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.9", "3.11", "3.13"]
+        python-version: ["3.10", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -27,7 +27,7 @@ jobs:
 
   python-no-openmp:
     # the kernel must also build and give the same results without OpenMP (e.g. Apple clang)
-    runs-on: ubuntu-24.04  # ubuntu-latest moved to 26.04 (no Python 3.9)
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -60,7 +60,7 @@ jobs:
       - run: python benchmarks/kernels.py --repeat 2
 
   matlab-octave:
-    runs-on: ubuntu-24.04  # ubuntu-latest moved to 26.04 (no Python 3.9)
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends octave octave-dev
