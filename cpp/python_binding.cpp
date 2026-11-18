@@ -6,6 +6,7 @@
 #include "ddma_abstraction.hpp"
 #include "ddma_core.hpp"
 #include "ddma_growth.hpp"
+#include "ddma_monitor.hpp"
 #include "ddma_synthesis.hpp"
 
 #include <algorithm>
@@ -351,7 +352,199 @@ static py::tuple abstraction_pairs(py::dict spec, arri64 Q, arri64 P, py::dtype 
   return py::make_tuple(en, first, last);
 }
 
+// ---------------------------------------------------------------- assumption monitor
+// Shared arguments: lo, hi (m, n) slope bounds; theta (m,); tol; Z (K, n), Y (K, m).
+using arri64m = py::array_t<std::int64_t, py::array::c_style | py::array::forcecast>;
+using arru8m = py::array_t<std::uint8_t, py::array::c_style | py::array::forcecast>;
+
+struct MonArgs {
+  ddma::mon::Spec s;
+  ddma::mon::View v;
+};
+
+static MonArgs mon_args(const arr& lo, const arr& hi, const arr& theta, double tol, const arr& Z,
+                        const arr& Y) {
+  if (lo.ndim() != 2 || hi.ndim() != 2 || lo.shape(0) != hi.shape(0) || lo.shape(1) != hi.shape(1))
+    throw std::invalid_argument("lo and hi must be (m, n)");
+  const int m = int(lo.shape(0)), n = int(lo.shape(1));
+  if (theta.size() != m) throw std::invalid_argument("theta must have m entries");
+  if (Z.ndim() != 2 || Y.ndim() != 2 || Z.shape(1) != n || Y.shape(1) != m || Z.shape(0) != Y.shape(0))
+    throw std::invalid_argument("Z must be (K, n) and Y (K, m)");
+  MonArgs a;
+  a.s = {m, n, lo.data(), hi.data(), theta.data(), tol};
+  a.v = {Z.data(), Y.data(), Z.shape(0), n, 1, m, 1};
+  return a;
+}
+
+// Need as (any (m,) bool, width_r (m,), hi (m, n), hi_out (m, n) bool, lo, lo_out).
+static py::tuple need_tuple(const ddma::mon::Need& N) {
+  const auto m = N.m, n = N.n;
+  py::array_t<bool> any(m), hio({m, n}), loo({m, n});
+  py::array_t<double> w(m), hv({m, n}), lv({m, n});
+  for (int i = 0; i < m; ++i) {
+    any.mutable_data()[i] = N.any[i];
+    w.mutable_data()[i] = N.width_r[i];
+  }
+  for (std::size_t t = 0; t < N.hi.size(); ++t) {
+    hv.mutable_data()[t] = N.hi[t];
+    lv.mutable_data()[t] = N.lo[t];
+    hio.mutable_data()[t] = N.hi_out[t];
+    loo.mutable_data()[t] = N.lo_out[t];
+  }
+  return py::make_tuple(any, w, hv, hio, lv, loo);
+}
+
+// Level 2: (need, worst (m,), witness (m,) stored index or -1).
+static py::tuple monitor_list(arr lo, arr hi, arr theta, double tol, arr Z, arr Y, arr z, arr y,
+                              arri64m idx, arru8m status) {
+  auto a = mon_args(lo, hi, theta, tol, Z, Y);
+  if (z.size() != a.s.n || y.size() != a.s.m) throw std::invalid_argument("z must have n and y m entries");
+  if (status.size() < a.v.K) throw std::invalid_argument("status must have K entries");
+  ddma::mon::Need N(a.s.m, a.s.n);
+  std::vector<ddma::mon::Worst> W(a.s.m);
+  {
+    py::gil_scoped_release release;
+    ddma::mon::check_list(a.s, a.v, z.data(), y.data(), idx.data(), idx.size(), status.data(), N, W.data());
+  }
+  py::array_t<double> wg(a.s.m);
+  arri64m wk(a.s.m);
+  for (int i = 0; i < a.s.m; ++i) {
+    wg.mutable_data()[i] = W[i].gap;
+    wk.mutable_data()[i] = W[i].k;
+  }
+  return py::make_tuple(need_tuple(N), wg, wk);
+}
+
+static ddma::mon::Grid grid_view(const py::tuple& g, int n, int m, std::int64_t K) {
+  if (g.size() != 10) throw std::invalid_argument("grid must be a tuple of 10 arrays");
+  ddma::mon::Grid G;
+  G.n = n;
+  G.m = m;
+  // The tuple keeps the arrays alive; they must already have the right type and layout
+  // (no conversion: a converted copy would be freed when this function returns).
+  auto i64 = [&](int k) {
+    py::array x = g[k].cast<py::array>();
+    if (!py::isinstance<arri64m>(x) || !(x.flags() & py::array::c_style))
+      throw std::invalid_argument("grid arrays 0, 7, 8, 9 must be C-contiguous int64");
+    return arri64m::ensure(x);
+  };
+  auto f64 = [&](int k) {
+    py::array x = g[k].cast<py::array>();
+    if (!py::isinstance<arr>(x) || !(x.flags() & py::array::c_style))
+      throw std::invalid_argument("grid arrays 1 to 6 must be C-contiguous float64");
+    return arr::ensure(x);
+  };
+  auto cdim = i64(0), cnt = i64(7), head = i64(8), next = i64(9);
+  auto glo = f64(1), ginv = f64(2), zlo = f64(3), zhi = f64(4), ylo = f64(5), yhi = f64(6);
+  if (cdim.size() != n) throw std::invalid_argument("grid: one cell count per input");
+  std::int64_t C = 1;
+  for (int j = 0; j < n; ++j) C *= cdim.data()[j];
+  if (cnt.size() < C || head.size() < C || zlo.size() < C * n || zhi.size() < C * n ||
+      ylo.size() < C * m || yhi.size() < C * m || next.size() < K)
+    throw std::invalid_argument("grid arrays too small");
+  G.C = C;
+  G.cdim = cdim.data();
+  G.glo = glo.data();
+  G.ginv = ginv.data();
+  G.zlo = zlo.data();
+  G.zhi = zhi.data();
+  G.ylo = ylo.data();
+  G.yhi = yhi.data();
+  G.cnt = cnt.data();
+  G.head = head.data();
+  G.next = next.data();
+  for (std::int64_t c = 0; c < C; ++c)
+    if (G.head[c] >= K) throw std::invalid_argument("grid list points beyond the data");
+  return G;
+}
+
+// Level 3: (need, worst (P, m), witness (P, m), inrange (R, 3) int64 [q, k, i], gaps (R,), pairs).
+static py::tuple monitor_full(arr lo, arr hi, arr theta, double tol, arr Z, arr Y, arru8m status,
+                              std::int64_t first, std::int64_t last, py::object grid, bool prune) {
+  auto a = mon_args(lo, hi, theta, tol, Z, Y);
+  if (status.size() < a.v.K) throw std::invalid_argument("status must have K entries");
+  ddma::mon::Grid G;
+  const ddma::mon::Grid* gp = nullptr;
+  if (!grid.is_none()) {
+    G = grid_view(grid.cast<py::tuple>(), a.s.n, a.s.m, a.v.K);
+    gp = &G;
+  }
+  ddma::mon::FullOut o;
+  {
+    py::gil_scoped_release release;
+    o = ddma::mon::check_full(a.s, a.v, status.data(), first, last, gp, prune);
+  }
+  const std::int64_t P = last - first, m = a.s.m, R = std::int64_t(o.inrange.size());
+  py::array_t<double> wg({P, m}), gaps(R);
+  arri64m wk({P, m}), ir({R, std::int64_t(3)});
+  for (std::size_t r = 0; r < o.worst.size(); ++r) {
+    wg.mutable_data()[r] = o.worst[r].gap;
+    wk.mutable_data()[r] = o.worst[r].k;
+  }
+  for (std::int64_t r = 0; r < R; ++r) {
+    ir.mutable_data()[3 * r] = o.inrange[r].q;
+    ir.mutable_data()[3 * r + 1] = o.inrange[r].k;
+    ir.mutable_data()[3 * r + 2] = o.inrange[r].i;
+    gaps.mutable_data()[r] = o.inrange[r].gap;
+  }
+  return py::make_tuple(need_tuple(o.need), wg, wk, ir, gaps, o.pairs);
+}
+
+// check_data: (need, count (m,), worst (m,), pair (m, 2) [later, earlier], conflicts (K,), pairs).
+static py::tuple monitor_all(arr lo, arr hi, arr theta, double tol, arr Z, arr Y, bool prune) {
+  auto a = mon_args(lo, hi, theta, tol, Z, Y);
+  ddma::mon::AllOut o;
+  {
+    py::gil_scoped_release release;
+    o = ddma::mon::check_all(a.s, a.v, prune);
+  }
+  const std::int64_t m = a.s.m, K = a.v.K;
+  arri64m cnt(m), pr({m, std::int64_t(2)}), conf(K);
+  py::array_t<double> wg(m);
+  for (int i = 0; i < m; ++i) {
+    cnt.mutable_data()[i] = o.count[i];
+    wg.mutable_data()[i] = o.worst[i].gap;
+    pr.mutable_data()[2 * i] = o.worst[i].a;
+    pr.mutable_data()[2 * i + 1] = o.worst[i].b;
+  }
+  std::copy(o.conflicts.begin(), o.conflicts.end(), conf.mutable_data());
+  return py::make_tuple(need_tuple(o.need), cnt, wg, pr, conf, o.pairs);
+}
+
+// Grid of the points: (cdim, glo, ginv, zlo, zhi, ylo, yhi, cnt, head, next, cell).
+static py::tuple monitor_grid(arr Z, arr Y) {
+  if (Z.ndim() != 2 || Y.ndim() != 2 || Z.shape(0) != Y.shape(0))
+    throw std::invalid_argument("Z must be (K, n) and Y (K, m)");
+  const int n = int(Z.shape(1)), m = int(Y.shape(1));
+  ddma::mon::View v{Z.data(), Y.data(), Z.shape(0), n, 1, m, 1};
+  ddma::mon::GridData G;
+  {
+    py::gil_scoped_release release;
+    G = ddma::mon::build_grid(v, n, m);
+  }
+  auto vec_i = [](const std::vector<std::int64_t>& x) {
+    arri64m a(std::int64_t(x.size()));
+    std::copy(x.begin(), x.end(), a.mutable_data());
+    return a;
+  };
+  auto mat_d = [](const std::vector<double>& x, std::int64_t r, std::int64_t c) {
+    py::array_t<double> a({r, c});
+    std::copy(x.begin(), x.end(), a.mutable_data());
+    return a;
+  };
+  py::array_t<double> glo(n), ginv(n);
+  std::copy(G.glo.begin(), G.glo.end(), glo.mutable_data());
+  std::copy(G.ginv.begin(), G.ginv.end(), ginv.mutable_data());
+  return py::make_tuple(vec_i(G.cdim), glo, ginv, mat_d(G.zlo, G.C, n), mat_d(G.zhi, G.C, n),
+                        mat_d(G.ylo, G.C, m), mat_d(G.yhi, G.C, m), vec_i(G.cnt), vec_i(G.head),
+                        vec_i(G.next), vec_i(G.cell));
+}
+
 PYBIND11_MODULE(_core, mod) {
+  mod.def("monitor_list", &monitor_list, "Monitor level 2: one point against a list");
+  mod.def("monitor_full", &monitor_full, "Monitor level 3: points [first, last) against all earlier ones");
+  mod.def("monitor_all", &monitor_all, "check_data: all pairs");
+  mod.def("monitor_grid", &monitor_grid, "Cell grid of the points (for pruning)");
   mod.def("abstraction_rows", &abstraction_rows,
           "Fill the transitions of the state cells qs (all inputs) in place");
   mod.def("abstraction_pairs", &abstraction_pairs,
