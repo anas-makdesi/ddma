@@ -75,6 +75,7 @@ intersphinx_timeout = 10
 # ---------------------------------------------------------------- HTML
 html_theme = "furo"
 html_title = f"ddma {release}"
+html_baseurl = "https://anas-makdesi.github.io/ddma/"
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
 html_theme_options = {

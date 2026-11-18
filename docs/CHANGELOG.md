@@ -6,7 +6,8 @@
 - Seven tutorials, executed on every build: the minimal simulating map of a scalar function; from data to a certified safe controller (cruise control, safety filter, reach-avoid); bounded-derivative models (the five methods on the pendulum, estimating derivative bounds); online learning (local and batch updates, `refresh`, `known_winning`, lazy abstractions); a learning agent inside a safety filter; safe envelopes without a grid; the assumption monitor. Each ends with the MATLAB version of its main calls, run under Octave in CI (`docs/check_matlab_snippets.py`).
 - API reference for Python (from the docstrings) and MATLAB (from the help text of every `+ddma` function; the build fails if a function is missing from the reference).
 - Getting started (installation, core ideas and notation) and the existing guides (PARITY, INVARIANCE, MONITOR, PERFORMANCE, REPRODUCTION).
-- CI job `docs` (`sphinx-build -W`, HTML kept as an artifact); `pip install -e ".[docs]"`.
+- CI job `docs` (`sphinx-build -W`, HTML kept as an artifact) on every branch; workflow `docs-pages` publishes the site on GitHub Pages from `main`; `pip install -e ".[docs]"`.
+- `matlab/examples/online_refinement.m`: local updates now use a window of 3 cells (setting `window`); with 1 they barely grew the safe set between the batch updates.
 - Docstrings for the remaining public methods and properties; `tests/test_docs.py` checks that every public name has one.
 
 ## 0.12.0 (18 November 2026)

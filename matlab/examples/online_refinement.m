@@ -3,13 +3,16 @@
 %   with loose derivative bounds). Start from data collected near the bottom only, run
 %   the certified controller with random allowed inputs (it explores the edge of the
 %   safe region), and refine the model with every measurement:
-%     ddma.bd_update_local   each step (cells around the new point; cheap)
+%     ddma.bd_update_local   each step (cells within `window` cells of the new point; cheap)
 %     ddma.bd_update         every 200 steps with the batch since the last one (exact)
 %     ddma.abstraction_refresh + ddma.safety(..., known_winning)   after each refinement
 %   The safe set only grows (about 50 % -> 80 % of the specification in 1000 steps), and
 %   the closed loop never leaves the specification. Same functions as the Python
 %   BoundedDerivativeModel.update / update_local, SymbolicAbstraction.refresh and
-%   safety(known_winning=). Settings: nc (cells per state axis), K, r0 (set them first).
+%   safety(known_winning=). Settings: nc (cells per state axis), K, r0, window (set them
+%   first). window = 3 (default): with window = 1 the local updates alone barely grow the
+%   safe set (the transitions that decide a cell at its edge start a few cells away from
+%   the measurement); the batch updates still do. Python: docs tutorial 4.
 %   Run from the matlab/ folder:  run examples/online_refinement
 addpath(fullfile(fileparts(mfilename('fullpath')), '..'));   % the +ddma package
 T = 0.1; D = 0.005;
@@ -29,6 +32,7 @@ safe = ddma.cells_inside(Xedges, [-0.8 -1.2], [0.8 1.2]);
 ddma.seed(1);
 if ~exist('K', 'var'), K = 2000; end
 if ~exist('r0', 'var'), r0 = 0.15; end
+if ~exist('window', 'var'), window = 3; end
 X = [r0 * (2 * rand(K, 1) - 1), 1.5 * r0 * (2 * rand(K, 1) - 1)]; U = 4 * rand(K, 1) - 2;
 Y = [zeros(K, 1), f(X, U) + D * (2 * rand(K, 1) - 1)];
 S = ddma.bd_fit([X U], Y, edges, g_lo, g_hi, [0 -D], [0 D], 'growth', 'slab');
@@ -48,7 +52,7 @@ for k = 1:1000
     if isempty(u), viol = viol + 1; break; end
     xn = step(x, u);
     y = [0, xn(2) - x * A_G(2, :)'];                          % measurement of f + d
-    S = ddma.bd_update_local(S, [x u], y, 1);
+    S = ddma.bd_update_local(S, [x u], y, window);
     batch(end + 1, :) = [x u y];
     if any(xn < [-0.8 -1.2] | xn > [0.8 1.2]), viol = viol + 1; end
     x = xn;
@@ -64,6 +68,9 @@ for k = 1:1000
         [A, S] = ddma.abstraction_refresh(A, S);            % cells changed by update_local
         [domain, allowed] = ddma.safety(A, safe, [], domain);
         t_ref = t_ref + toc;
+        if mod(k, 100) == 0
+            fprintf('step %4d: safe region %.1f %% of the specification\n', k, 100 * nnz(domain) / nnz(safe));
+        end
     end
 end
 fprintf('%d steps, %d violations; refinement time %.2f s in total\n', k, viol, t_ref);

@@ -126,7 +126,7 @@ MATLAB needs a few small functions that Python gets from NumPy or keeps internal
 | `rl_safety_filter.py` (PPO with Stable-Baselines3) | `rl_safety_filter.m` (exploring agents; with the RL Toolbox, train any agent on `rlFunctionEnv(..., safeStep, safeReset)`) |
 | `envelope_room_cooling.py` | `envelope_room_cooling.m` |
 | `envelope_nonlinear.py` | `envelope_nonlinear.m` |
-| — | `online_refinement.m` |
+| tutorial 4 of the docs (`docs/tutorials/04-online-learning.md`) | `online_refinement.m` |
 
 The examples use random data, so the two languages draw different samples and print slightly different numbers; on the same data the results are equal (tested).
 

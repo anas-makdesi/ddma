@@ -10,7 +10,7 @@ and models of systems that are **not monotone but have bounded derivatives** (TA
 
 **Python and MATLAB.** Both interfaces share one C++ core, they are tested against each other, and the experiments of the three papers and of the thesis chapter are reproduced (see [docs/REPRODUCTION.md](docs/REPRODUCTION.md)). Every feature is in both languages, and the MATLAB results are checked against Python's in CI: see [docs/PARITY.md](docs/PARITY.md) for the name of each function in each language.
 
-**Documentation.** `docs/` holds a documentation site (Sphinx): seven tutorials that walk through the toolbox from a scalar map to the assumption monitor, executed on every build so their outputs are those of the current code, with the MATLAB version of each one; and an API reference for both languages, generated from the docstrings and the MATLAB help text. Build it with `pip install -e ".[docs]"` and `sphinx-build -b html docs docs/_build/html`, then open `docs/_build/html/index.html`.
+**Documentation: [anas-makdesi.github.io/ddma](https://anas-makdesi.github.io/ddma/).** The site (Sphinx, sources in `docs/`) has seven tutorials that walk through the toolbox from a scalar map to the assumption monitor, executed on every build so their outputs are those of the current code, with the MATLAB version of each one; and an API reference for both languages, generated from the docstrings and the MATLAB help text. To build it locally: `pip install -e ".[docs]"` and `sphinx-build -b html docs docs/_build/html`, then open `docs/_build/html/index.html`.
 
 ![Minimal simulating map of a scalar monotone map](docs/figures/scalar_map.png)
 
