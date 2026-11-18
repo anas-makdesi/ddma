@@ -2,9 +2,14 @@ function M = monitor_for_model(S, Z, Y, opts)
 %MONITOR_FOR_MODEL Assumption monitor of a fitted map, seeded with its data (Z, Y).
 %   S from ddma.fit (signs), ddma.bd_fit or ddma.growth_map (derivative bounds: [g_lo, g_hi]
 %   for the growth methods, [min(g_lo,0), max(g_hi,0)] for the others, 0 outside features).
-%   The map's cell bounds are also checked. Same as AssumptionMonitor.for_model.
+%   The map's cell bounds are level 1. Monotone maps (ddma.fit) can only widen the
+%   disturbance. Same as AssumptionMonitor.for_model.
 if nargin < 4, opts = struct(); end
 if isfield(S, 'signs')
+    if isfield(opts, 'widen') && ~(ischar(opts.widen) && strcmp(opts.widen, 'disturbance'))
+        error('ddma:monitor_for_model', ['a monotone model can only widen the disturbance ' ...
+              '(widening a sign makes the model non-monotone: use ddma.bd_fit)']);
+    end
     s = S.signs;
     m = size(S.upper, 2); n = numel(S.edges);
     if isempty(s), s = ones(m, n); end

@@ -1,7 +1,8 @@
 function build_mex(openmp)
 %BUILD_MEX Compile the C++ kernels (optional; ddma falls back to MATLAB code):
 %   ddma_fit_mex (ddma.fit), ddma_synth_mex (ddma.safety, ddma.reach_avoid),
-%   ddma_growth_mex (ddma.bd_fit, growth methods) and ddma_abs_mex (ddma.abstraction).
+%   ddma_growth_mex (ddma.bd_fit, growth methods), ddma_abs_mex (ddma.abstraction) and
+%   ddma_monitor_mex (ddma.check_data, ddma.monitor_check).
 %   build_mex() builds with OpenMP (threads, see ddma.set_num_threads) when the compiler
 %   supports it: GCC/Clang (-fopenmp), Microsoft's compiler (/openmp), and Apple's
 %   compiler when Homebrew's libomp is installed (brew install libomp; another folder can
@@ -16,7 +17,7 @@ inc = ['-I' fullfile(here, '..', 'cpp')];
 old = cd(here);
 c = onCleanup(@() cd(old));
 if openmp, ways = omp_ways(); else, ways = {}; end
-for name = {'ddma_fit_mex', 'ddma_synth_mex', 'ddma_growth_mex', 'ddma_abs_mex'}
+for name = {'ddma_fit_mex', 'ddma_synth_mex', 'ddma_growth_mex', 'ddma_abs_mex', 'ddma_monitor_mex'}
     src = fullfile(here, [name{1} '.cpp']);
     done = false;
     for w = 1:numel(ways)
