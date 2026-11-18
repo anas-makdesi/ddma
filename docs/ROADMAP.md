@@ -14,6 +14,5 @@ Planned work, roughly in order. Contributions and suggestions are welcome throug
 - Non-uniform and adaptive partitions that refine where the specification is decided.
 
 ## Distribution
-- Documentation site with API reference and tutorial notebooks.
 - Pre-built wheels on PyPI, so no compiler is needed.
 - MATLAB toolbox file (.mltbx) with pre-built MEX files for Windows, macOS and Linux.

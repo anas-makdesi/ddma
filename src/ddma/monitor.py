@@ -214,6 +214,8 @@ class DataCheck:
         return idx if k is None else idx[:k]
 
     def report(self) -> str:
+        """Plain-words summary: conflicting pairs, the single changes that would explain
+        them, and the points with most conflicts."""
         out = _names(self.output_names, "output")
         inp = _names(self.input_names, "input")
         nbad = int(np.count_nonzero(self.conflicts))
@@ -495,14 +497,17 @@ class AssumptionMonitor:
     # ------------------------------------------------------------------ properties
     @property
     def m(self) -> int:
+        """Number of outputs."""
         return self.slope_lo.shape[0]
 
     @property
     def n(self) -> int:
+        """Number of inputs."""
         return self.slope_lo.shape[1]
 
     @property
     def theta(self) -> np.ndarray:
+        """Disturbance width per output, ``d_hi - d_lo`` (the only part data can test)."""
         return self.d_hi - self.d_lo
 
     @property

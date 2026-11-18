@@ -10,6 +10,8 @@ and models of systems that are **not monotone but have bounded derivatives** (TA
 
 **Python and MATLAB.** Both interfaces share one C++ core, they are tested against each other, and the experiments of the three papers and of the thesis chapter are reproduced (see [docs/REPRODUCTION.md](docs/REPRODUCTION.md)). Every feature is in both languages, and the MATLAB results are checked against Python's in CI: see [docs/PARITY.md](docs/PARITY.md) for the name of each function in each language.
 
+**Documentation.** `docs/` holds a documentation site (Sphinx): seven tutorials that walk through the toolbox from a scalar map to the assumption monitor, executed on every build so their outputs are those of the current code, with the MATLAB version of each one; and an API reference for both languages, generated from the docstrings and the MATLAB help text. Build it with `pip install -e ".[docs]"` and `sphinx-build -b html docs docs/_build/html`, then open `docs/_build/html/index.html`.
+
 ![Minimal simulating map of a scalar monotone map](docs/figures/scalar_map.png)
 
 ## The idea
@@ -286,11 +288,12 @@ The Python tests are in `tests/` and run in under a minute with `pytest`. They c
 - **Safe envelopes**: the monotone search equals brute-force enumeration; the closed-form pair bound equals an LP solver; every certified corner or box is pushed through the true dynamics with random inputs and worst-case disturbances, and closed loops from thousands of certified states never leave the envelope (Python and MATLAB, MATLAB checked against Python).
 - **Assumption monitor**: correct assumptions never raise an alarm (all model types and methods); a wrong sign, a too-small derivative bound, a missing dependence and a larger disturbance are each detected, and the computed smallest change matches the true value; it is exact (equal to bisection with a full consistency check, and to brute force over all pairs). `check_data` equals brute force and finds corrupted points; each level detects what it should; checking later with `flush()` gives the same result as checking every step; quarantine prevents follow-up alarms; the widening limit switches to fallback. C++ (with and without pruning, any number of threads), NumPy and MATLAB (`.m` and MEX) give the same bits; MATLAB draws the same random samples as Python.
 - **Threads**: every learning kernel gives the same bits with 1, 2 and all threads and with every way of sharing the work among them, in Python and MATLAB, and the same bits as the earlier single-threaded kernels. The compiled abstraction equals the NumPy and `.m` code on every kind of model, `g`, assumption and partition, for any number of threads. CI builds with and without OpenMP (on demand also on macOS and Windows).
+- **Documentation**: the tutorials are executed on every CI run (a failing cell or a Sphinx warning fails the build), their MATLAB snippets run under Octave, and every public Python name must have a docstring.
 - **Closed loop**: simulated trajectories under the synthesized controllers and the safety filter never leave the safe set and always reach the target.
 
 ## Roadmap
 
-Next: documentation site and pre-built wheels. See [docs/ROADMAP.md](docs/ROADMAP.md).
+Next: pre-built wheels and a MATLAB toolbox file. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Authors
 

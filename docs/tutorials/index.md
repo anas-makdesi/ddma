@@ -1,6 +1,6 @@
 # Tutorials
 
-Six notebooks that walk through the toolbox in the order its ideas build on each other. Each
+Seven notebooks that walk through the toolbox in the order its ideas build on each other. Each
 one runs in a few seconds (they are executed every time this site is built, with small
 settings), and each explains *why* as well as *how*.
 
@@ -12,5 +12,6 @@ settings), and each explains *why* as well as *how*.
 | 4 | {doc}`04-online-learning` | learning while running: local updates, `refresh`, `known_winning`, lazy abstractions |
 | 5 | {doc}`05-rl-safety-filter` | a reinforcement-learning agent inside a certified safety filter |
 | 6 | {doc}`06-gridless-envelopes` | safe envelopes straight from data, without a grid |
+| 7 | {doc}`07-assumption-monitor` | what if the assumptions are wrong: checking data before learning and while running |
 
 Each tutorial ends with the MATLAB version of its main calls.

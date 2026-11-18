@@ -73,6 +73,24 @@ Safe envelopes without a grid (``ddma.invariance``)
 
 .. autofunction:: ddma.invariance.max_min_cones
 
+Assumption monitor
+------------------
+
+.. automodule:: ddma.monitor
+   :no-members:
+
+.. currentmodule:: ddma
+
+.. autofunction:: check_data
+
+.. autoclass:: ddma.monitor.DataCheck
+
+.. autoclass:: AssumptionMonitor
+
+.. autoclass:: Violation
+
+.. autofunction:: ddma.monitor.slopes_from_signs
+
 Reinforcement learning (``ddma.rl``)
 ------------------------------------
 

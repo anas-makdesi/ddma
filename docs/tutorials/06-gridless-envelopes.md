@@ -263,8 +263,8 @@ which chooses an input per cell, certifies far more. Choose by the structure:
 - Each region gets one input range, so systems that need a state-dependent input inside a
   region (integrator chains) are better served by the grid abstraction.
 
-This is the end of the tutorials. From here: the {doc}`../guides/envelopes` guide for
-implementation details, and {doc}`../api/python` for every option.
+Next: {doc}`07-assumption-monitor`: what happens when the assumptions behind all of this are
+wrong. Implementation details: the {doc}`../guides/envelopes` guide.
 
 ## In MATLAB
 

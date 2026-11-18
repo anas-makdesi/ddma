@@ -28,6 +28,12 @@ GROUPS = [
     ("Safe envelopes without a grid", "",
      "monotone_envelope embedding_envelope envelope_contains envelope_input maximal_points "
      "max_min_cones"),
+    ("Assumption monitor",
+     "Check data against the model's assumptions: the learning data before learning "
+     "(`check_data`), new transitions while the system runs (`monitor*`).",
+     "check_data monitor monitor_monotone monitor_for_model monitor_add monitor_check "
+     "monitor_flush monitor_status monitor_data monitor_quarantine monitor_needed "
+     "monitor_widen monitor_consistent monitor_reset monitor_report monitor_rebuild_index"),
     ("Reinforcement learning",
      "Wrappers for environments in the form used by the Reinforcement Learning Toolbox "
      "(`rlFunctionEnv`).",

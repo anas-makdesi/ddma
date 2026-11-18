@@ -80,10 +80,24 @@ def _convert(lines: list[str]) -> list[str]:
     return out
 
 
+def _bare_entries(lines: list[str]) -> list[str]:
+    """A paragraph of ``name : description`` entries without a section header (class
+    docstrings listing their fields) is read as an Attributes section."""
+    out: list[str] = []
+    prev_blank = True
+    for ln in lines:
+        m = _ENTRY.match(ln)
+        if prev_blank and m and not ln.startswith(" ") and out and out[-1] != "Attributes":
+            out += ["Attributes", "----------"]
+        out.append(ln)
+        prev_blank = not ln.strip()
+    return out
+
+
 def process(app, what, name, obj, options, lines):
     if not name.startswith("ddma"):
         return
-    new = _convert([_escape(ln) for ln in lines])
+    new = _convert(_bare_entries([_escape(ln) for ln in lines]))
     lines[:] = new
 
 

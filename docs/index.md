@@ -74,6 +74,7 @@ tutorials/03-pendulum
 tutorials/04-online-learning
 tutorials/05-rl-safety-filter
 tutorials/06-gridless-envelopes
+tutorials/07-assumption-monitor
 ```
 
 ```{toctree}
@@ -82,6 +83,7 @@ tutorials/06-gridless-envelopes
 
 guides/parity
 guides/envelopes
+guides/monitor
 guides/performance
 guides/reproduction
 ```

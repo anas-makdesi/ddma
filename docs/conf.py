@@ -36,7 +36,7 @@ source_suffix = {".rst": "restructuredtext", ".md": "myst-nb"}
 # the Markdown files at the top of docs/ are linked from the README; the guides
 # include them, so they are not built twice
 exclude_patterns = ["_build", "jupyter_execute", "**/.ipynb_checkpoints", "rl_safety_filter.json",
-                    "CHANGELOG.md", "INVARIANCE.md", "PARITY.md", "PERFORMANCE.md",
+                    "CHANGELOG.md", "INVARIANCE.md", "MONITOR.md", "PARITY.md", "PERFORMANCE.md",
                     "REPRODUCTION.md", "ROADMAP.md"]
 myst_enable_extensions = ["dollarmath", "amsmath", "colon_fence", "deflist", "attrs_inline"]
 myst_heading_anchors = 3
@@ -92,7 +92,8 @@ copybutton_prompt_is_regexp = True
 # docs/*.md link to each other by file name (so the links work on GitHub); here those
 # files are included by the guides, so point the links at the guide pages.
 _GUIDES = {"PARITY.md": "guides/parity", "PERFORMANCE.md": "guides/performance",
-           "INVARIANCE.md": "guides/envelopes", "REPRODUCTION.md": "guides/reproduction",
+           "INVARIANCE.md": "guides/envelopes", "MONITOR.md": "guides/monitor",
+           "REPRODUCTION.md": "guides/reproduction",
            "CHANGELOG.md": "about/changelog", "ROADMAP.md": "about/roadmap"}
 
 
