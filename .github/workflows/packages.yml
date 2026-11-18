@@ -1,0 +1,199 @@
+# Pre-built packages: Python wheels (Linux, macOS, Windows) and a MATLAB toolbox (.mltbx).
+# Nothing is uploaded anywhere: the packages are kept as artifacts of the run (Actions tab).
+#
+#   sdist          source package (pip builds the C++ kernels on install)
+#   wheels         cibuildwheel, CPython 3.10-3.15; every wheel must have the compiled kernels
+#                  with OpenMP and passes the whole test suite (settings in pyproject.toml)
+#   clean-install  each wheel installed on a fresh machine (macOS: Homebrew's libomp removed
+#                  first), to show the OpenMP runtime inside the wheel is the one used
+#   mex            MEX files built in MATLAB on Linux, macOS (Apple silicon) and Windows, and
+#                  the MATLAB test suites run against the Python reference results
+#   mltbx          the toolbox packaged from the three sets of MEX files, then installed in a
+#                  fresh MATLAB and used once
+name: packages
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, wheels]
+    tags: ["v*"]
+    paths:
+      - setup.py
+      - pyproject.toml
+      - MANIFEST.in
+      - "cpp/**"
+      - "src/**"
+      - "matlab/**"
+      - ".github/workflows/packages.yml"
+      - ".github/scripts/**"
+
+concurrency:
+  group: packages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sdist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install build twine
+      - run: python -m build --sdist
+      - run: twine check --strict dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+
+  wheels:
+    name: wheels (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-14, macos-15-intel, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: OpenMP for Apple's compiler
+        if: runner.os == 'macOS'
+        run: |
+          brew install libomp
+          # the wheel cannot target an older macOS than the libomp it carries
+          lib="$(brew --prefix libomp)/lib/libomp.dylib"
+          target=$(otool -l "$lib" | awk '/minos/ {print $2; exit}')
+          echo "libomp built for macOS $target"
+          echo "MACOSX_DEPLOYMENT_TARGET=$target" >> "$GITHUB_ENV"
+      - uses: pypa/cibuildwheel@v4.3.5
+      - name: libraries inside the wheels
+        shell: bash
+        run: |
+          python3 - <<'EOF'
+          import glob, zipfile
+          for w in sorted(glob.glob("wheelhouse/*.whl")):
+              libs = [n for n in zipfile.ZipFile(w).namelist()
+                      if n.endswith((".dll", ".dylib", ".pyd")) or ".so" in n]
+              print(w.split("/")[-1])
+              for n in libs:
+                  print("   ", n)
+          EOF
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}
+          path: wheelhouse/*.whl
+
+  clean-install:
+    name: clean install (${{ matrix.os }})
+    needs: wheels
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-14, macos-15-intel, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/download-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}
+          path: wheelhouse
+      - name: no Homebrew libomp on this machine
+        if: runner.os == 'macOS'
+        run: brew uninstall --ignore-dependencies libomp || echo "libomp was not installed"
+      - name: install the wheel (ddma only from the wheels, NumPy from PyPI)
+        shell: bash
+        run: pip install --find-links wheelhouse --only-binary ddma ddma pytest
+      - name: kernels and OpenMP present
+        working-directory: ${{ runner.temp }}
+        run: python ${{ github.workspace }}/.github/scripts/check_wheel.py
+      - name: thread tests on the installed wheel
+        working-directory: ${{ runner.temp }}
+        run: python -m pytest -q -p no:cacheprovider ${{ github.workspace }}/tests/test_threads.py ${{ github.workspace }}/tests/test_monitor.py
+
+  mex:
+    name: MEX (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: OpenMP for Apple's compiler
+        if: runner.os == 'macOS'
+        run: brew install libomp
+      - uses: matlab-actions/setup-matlab@v3
+        with:
+          release: R2023b
+      - name: build the MEX files and run the MATLAB tests
+        uses: matlab-actions/run-command@v3
+        with:
+          command: cd matlab; build_mex; addpath tests; run_tests; run_threads_tests; run_abstraction_tests; run_monitor_tests; run_invariance_tests
+      - name: "macOS: put libomp next to the MEX files"
+        if: runner.os == 'macOS'
+        working-directory: matlab
+        run: |
+          prefix="$(brew --prefix libomp)"
+          cp "$prefix/lib/libomp.dylib" libomp.dylib
+          chmod u+w libomp.dylib
+          install_name_tool -id @loader_path/libomp.dylib libomp.dylib
+          for f in *.mexmaca64; do
+            old=$(otool -L "$f" | awk '/libomp/ {print $1; exit}')
+            install_name_tool -change "$old" @loader_path/libomp.dylib "$f"
+            install_name_tool -delete_rpath "$prefix/lib" "$f" 2>/dev/null || true
+          done
+          codesign -f -s - libomp.dylib *.mexmaca64
+          otool -L *.mexmaca64 | grep -i omp
+          brew uninstall --ignore-dependencies libomp
+      - name: "macOS: tests again, with the bundled libomp only"
+        if: runner.os == 'macOS'
+        uses: matlab-actions/run-command@v3
+        with:
+          command: cd matlab; addpath tests; run_threads_tests; run_monitor_tests
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mex-${{ matrix.os }}
+          path: |
+            matlab/*.mexa64
+            matlab/*.mexmaca64
+            matlab/*.mexw64
+            matlab/libomp.dylib
+          if-no-files-found: error
+
+  mltbx:
+    needs: mex
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: mex-*
+          path: matlab
+          merge-multiple: true
+      - name: version from pyproject.toml
+        run: echo "DDMA_VERSION=$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')" >> "$GITHUB_ENV"
+      - uses: matlab-actions/setup-matlab@v3
+        with:
+          release: R2023b
+      - name: package the toolbox
+        uses: matlab-actions/run-command@v3
+        with:
+          command: cd matlab; package_toolbox(getenv('DDMA_VERSION'), fullfile(pwd, '..'))
+      - name: install it in a fresh MATLAB and use it
+        uses: matlab-actions/run-command@v3
+        with:
+          command: >-
+            restoredefaultpath; cd(tempdir);
+            tb = matlab.addons.install(fullfile(getenv('GITHUB_WORKSPACE'), ['ddma-' getenv('DDMA_VERSION') '.mltbx']));
+            disp(tb);
+            assert(exist('ddma_fit_mex', 'file') == 3, 'MEX file not on the path');
+            z = linspace(0, 1, 50)'; S = ddma.fit(z, z.^3, {linspace(0, 1, 11)}, -0.01, 0.01, [], 'mex');
+            assert(all(isfinite(S.upper)), 'model not bounded');
+            disp(ddma.get_num_threads()); disp('toolbox works')
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mltbx
+          path: ddma-*.mltbx
