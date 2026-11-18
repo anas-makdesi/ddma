@@ -134,6 +134,8 @@ jobs:
       - uses: matlab-actions/setup-matlab@v3
         with:
           release: R2023b
+          # linprog, for the tests of the lin_* bounded-derivative methods
+          products: MATLAB Optimization_Toolbox
       - name: build the MEX files and run the MATLAB tests
         uses: matlab-actions/run-command@v3
         with:
