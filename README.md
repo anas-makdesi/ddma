@@ -149,19 +149,32 @@ In the cruise-control example the assumptions break mid-run, and the monitor cat
 
 ## Install
 
-**Python**
+**Python** (3.10 or newer)
 
 ```bash
-pip install -e .              # NumPy only; builds the C++ kernel if a compiler is available
-pip install -e ".[examples]"  # + matplotlib, scipy (examples and derivative-bound estimation)
-pip install -e ".[dev]"       # + pytest and ruff
+pip install ddma                # pre-built for Linux, macOS and Windows, threads included
+pip install "ddma[examples]"    # + matplotlib, scipy (examples and derivative-bound estimation)
+pip install "ddma[rl]"          # + gymnasium (the safety filter for reinforcement learning)
 ```
 
-Without a C++ compiler the package falls back to NumPy, which gives identical results, only slower. `ddma.compiled_backend_available()` tells you which backend is in use.
+The pre-built packages contain the compiled C++ kernels with OpenMP, so there is nothing else to install, also on macOS. On other systems pip builds the kernels from source; without a C++ compiler ddma falls back to NumPy, which gives identical results, only slower. `ddma.compiled_backend_available()` and `ddma.openmp_available()` tell you what you got.
 
-The compiled kernels learn models and build abstractions on all cores by default (OpenMP), with results that are bit-identical for any number of threads; `ddma.set_num_threads(n)` limits them. On macOS, run `brew install libomp` once before installing, otherwise the kernels run on one thread. Details: [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
+The compiled kernels learn models and build abstractions on all cores by default, with results that are bit-identical for any number of threads; `ddma.set_num_threads(n)` limits them. Details: [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 
-**MATLAB / Octave**
+From a clone, to run the examples and tests or to change the code:
+
+```bash
+git clone https://github.com/anas-makdesi/ddma && cd ddma
+pip install -e ".[dev]"         # + pytest and ruff; builds the C++ kernels
+```
+
+Building from source on macOS needs `brew install libomp` first, otherwise the kernels run on one thread.
+
+**MATLAB toolbox** (R2023b or newer)
+
+Download `ddma-<version>.mltbx` from the [releases page](https://github.com/anas-makdesi/ddma/releases) and open it in MATLAB, or run `matlab.addons.install("ddma-<version>.mltbx")`. It contains the `+ddma` package, the examples and pre-built MEX files (with threads) for Linux, Windows and macOS on Apple silicon; elsewhere the `.m` code runs, with the same results.
+
+**MATLAB / Octave from a clone**
 
 ```matlab
 cd matlab

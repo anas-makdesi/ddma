@@ -72,6 +72,7 @@ ignore = ["B905"]
 [tool.cibuildwheel]
 build = "cp310-* cp311-* cp312-* cp313-* cp314-* cp315-*"
 skip = "*t-* *-musllinux_*"  # not yet: free-threaded Python, musl Linux (Alpine)
+archs = ["auto64"]  # 64-bit only (NumPy and SciPy have no 32-bit Windows or Linux wheels)
 test-extras = ["dev"]
 test-command = [
   "python {project}/.github/scripts/check_wheel.py",

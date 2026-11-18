@@ -53,7 +53,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-14, macos-15-intel, windows-latest]
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, macos-15-intel, windows-latest]
     steps:
       - uses: actions/checkout@v4
       - name: OpenMP for Apple's compiler
@@ -90,7 +90,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-14, macos-15-intel, windows-latest]
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, macos-15-intel, windows-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -119,12 +119,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-14, windows-latest]
+        # windows-2022: Visual Studio 2022, a compiler MATLAB R2023b knows
+        os: [ubuntu-24.04, macos-15, windows-2022]
     steps:
       - uses: actions/checkout@v4
       - name: OpenMP for Apple's compiler
         if: runner.os == 'macOS'
         run: brew install libomp
+      - name: "Linux: GCC 10, the compiler of MATLAB R2023b (its MEX files load in R2023b and later)"
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends g++-10
+          echo "DDMA_MEX_CXX=g++-10" >> "$GITHUB_ENV"
       - uses: matlab-actions/setup-matlab@v3
         with:
           release: R2023b

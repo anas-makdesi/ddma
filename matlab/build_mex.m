@@ -9,6 +9,9 @@ function build_mex(openmp)
 %   be given with the environment variable LIBOMP_PREFIX). Otherwise it builds without
 %   OpenMP: one thread, same results.
 %   build_mex(false) builds without OpenMP.
+%   On Linux and macOS the environment variable DDMA_MEX_CXX can name the C++ compiler, e.g.
+%   setenv('DDMA_MEX_CXX', 'g++-10'): MEX files built with an older GCC also load in older
+%   MATLAB releases, which ship an older C++ library (used for the pre-built toolbox).
 %   -ffp-contract=off keeps floating-point operations exactly as written (no fused
 %   multiply-add), as in the Python build.
 if nargin < 1, openmp = true; end
@@ -97,6 +100,8 @@ if msvc
 else
     flags = {['CXXFLAGS=$CXXFLAGS -std=c++17 -ffp-contract=off -Wno-unknown-pragmas ' way.cxx], ...
              ['LDFLAGS=$LDFLAGS ' way.ld]};
+    cxx = getenv('DDMA_MEX_CXX');
+    if ~isempty(cxx), flags = [flags, {['CXX=' cxx], ['LDXX=' cxx]}]; end
 end
 mex('-O', flags{:}, inc, src);
 end
