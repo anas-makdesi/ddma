@@ -50,17 +50,22 @@ The data of `bd_fit` are `Z = [X U]` and `Y = X' - g(X, U)`, as for `ddma.fit` (
 
 | Python | MATLAB | Tested against Python |
 |---|---|---|
-| `AssumptionMonitor(slope_lo, slope_hi, d_lo, d_hi, on_violation=, widen=, margin=, max_points=, callback=, tol=)` | `M = ddma.monitor(slope_lo, slope_hi, d_lo, d_hi, opts)` (same option names in a struct; `widen` = `{'slope_lo', i, j}`, 1-based) | — |
+| `check_data(Z, Y, slope_lo, slope_hi, d_lo, d_hi, signs=, tol=, prune=, backend=)` → `DataCheck` (`ok`, `violating`, `worst`, `worst_pair`, `conflicts`, `needed`, `suspects()`, `report()`) | `R = ddma.check_data(Z, Y, slope_lo, slope_hi, d_lo, d_hi, opts)` (struct with the same fields; `suspects`, `report` as fields; indices 1-based) | same counts, worst pair, conflicts, needed changes |
+| `AssumptionMonitor(slope_lo, slope_hi, d_lo, d_hi, on_violation=, widen=, widen_limit=, slope_limit=, margin=, full=, sample=, prune=, callback=, tol=, seed=, backend=)` | `M = ddma.monitor(slope_lo, slope_hi, d_lo, d_hi, opts)` (same option names in a struct; `widen` = `{'slope_lo', i, j}`, 1-based; unknown options are an error) | — |
 | `AssumptionMonitor.monotone(signs, d_lo, d_hi, m=, n=)` | `ddma.monitor_monotone(signs, d_lo, d_hi, opts)` | — |
 | `AssumptionMonitor.for_model(model, Z, Y)` | `ddma.monitor_for_model(S, Z, Y, opts)` (S from `ddma.fit`, `ddma.bd_fit`, `ddma.growth_map`) | same slope intervals |
-| `.add(Z, Y)`, `.check(Z, Y)` → list of `Violation` | `ddma.monitor_add(M, Z, Y)`, `[M, viol] = ddma.monitor_check(M, Z, Y)` (struct array, indices 1-based) | same violations, gaps (≤ 1e-12) and witnesses |
+| `.add(Z, Y)`, `.check(Z, Y)` → list of `Violation` (`index`, `output`, `level`, `gap`, `witness`, `found_at`) | `ddma.monitor_add(M, Z, Y)`, `[M, viol] = ddma.monitor_check(M, Z, Y)` (struct array, indices 1-based, no witness = `nan`) | same violations, levels, gaps (≤ 1e-12), witnesses and `found_at`, also for level 2 (same random samples) |
+| `.flush()`, `.status()`, `.pending` | `[M, viol] = ddma.monitor_flush(M)`, `ddma.monitor_status(M)` | same violations |
 | `.observe(X, U, Xn)` (with `g=`, `features=`) | `ddma.monitor_check(M, Z, X' - g)` | — |
 | `.needed()` | `ddma.monitor_needed(M)` | ≤ 1e-12 |
 | `.widen(target)` | `ddma.monitor_widen(M, target)` | same widened bounds |
+| `.data(quarantined=False)`, `.quarantine()` | `[Z, Y] = ddma.monitor_data(M, quarantined)`, `ddma.monitor_quarantine(M)` | same quarantine flags |
 | `.consistent()`, `.reset()`, `.report()` | `ddma.monitor_consistent(M)`, `ddma.monitor_reset(M)`, `ddma.monitor_report(M)` | same verdict |
-| `.data()`, `.ok`, `.fallback_active`, `.needs_refit`, `.set_model(...)` | `M.Z`, `M.Y`, `isempty(M.violating)`, `M.fallback_active`, `M.needs_refit`, `M.model = S` | — |
+| `.rebuild_index()` | `ddma.monitor_rebuild_index(M)` | — |
+| `.ok`, `.fallback_active`, `.fallback_reason`, `.needs_refit`, `.set_model(...)` | `isempty(M.violating)`, `M.fallback_active`, `M.fallback_reason`, `M.needs_refit`, `M.model = S` | same fallback |
+| pair checks in C++ (`backend="cpp"` / `"numpy"`) | MEX `ddma_monitor_mex` (`backend` `'mex'` / `'matlab'`) | MEX = `.m` code bit for bit, 1–3 threads, with and without pruning |
 
-Tests: `matlab/tests/run_monitor_tests.m` (reference written by `matlab/tests/make_reference_monitor.py`). With `max_points` the random sample of stored points differs between the languages.
+Tests: `matlab/tests/run_monitor_tests.m` (reference written by `matlab/tests/make_reference_monitor.py`).
 
 ## Safe envelopes (no grid)
 
