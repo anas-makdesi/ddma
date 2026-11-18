@@ -26,7 +26,7 @@ from .invariance import (
     embedding_envelope,
     monotone_envelope,
 )
-from .monitor import AssumptionMonitor, Violation
+from .monitor import AssumptionMonitor, DataCheck, Violation, check_data
 from .msm import MinimalSimulatingMap
 from .partition import RectangularPartition
 from .partitioned import PartitionedSimulatingMap, compiled_backend_available
@@ -38,6 +38,8 @@ __version__ = "0.12.0"
 __all__ = [
     "AssumptionMonitor",
     "Violation",
+    "DataCheck",
+    "check_data",
     "BoundedDerivativeModel",
     "GrowthMap",
     "MonotoneEnvelope",

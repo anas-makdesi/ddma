@@ -91,9 +91,14 @@ def test_wrong_sign_detected_and_measured():
     assert -2.0 <= need["slope_lo"][0, 1] <= -1.9
     assert np.isnan(need["slope_hi"]).all()  # upper bounds cannot explain anything
     assert "contradicts 'non-decreasing'" in mon.report()
-    # the exact claim: changing that one bound to the needed value fixes all data
-    mon.widen(("slope_lo", 0, 1))
-    assert mon.consistent() and mon.needs_refit
+    # a sign cannot be widened (no scale) ...
+    with pytest.raises(ValueError):
+        mon.widen(("slope_lo", 0, 1))
+    # ... but the exact claim holds: that one bound at the needed value fixes all data
+    mon.slope_lo[0, 1] = need["slope_lo"][0, 1]
+    assert mon.consistent()
+    mon.slope_lo[0, 1] = need["slope_lo"][0, 1] / 1.01  # slightly less: not enough
+    assert not mon.consistent()
 
 
 def test_lipschitz_too_small_detected_and_exact():
@@ -115,7 +120,7 @@ def test_lipschitz_too_small_detected_and_exact():
         a, b = (a, mid) if mon.consistent() else (mid, b)
     assert abs(b - need["slope_hi"][0, 0]) < 1e-6
     # and the needed width equals the brute-force one
-    Zs, Ys = mon.data()
+    Zs, Ys = mon.data(quarantined=True)
     assert np.isclose(need["width"][0], brute_width(Zs, Ys[:, 0], lo[0], hi[0]))
 
 
@@ -150,14 +155,14 @@ def test_disturbance_too_large_detected_and_measured():
 
 
 def test_system_change_detected_through_model_bounds_only():
-    """With a tiny buffer the witness may be gone; the model bounds still catch it."""
+    """With no stored data there is no witness; level 1 (the model's bounds) catches it."""
     rng = np.random.default_rng(7)
     g = GrowthMap.from_data(*noisy(rng, lambda Z: Z[:, 0], 500, 1, 0.01),
                             RectangularPartition.uniform([0], [1], [20]), [0.5], [1.5],
                             -0.01, 0.01)
-    mon = AssumptionMonitor.for_model(g, max_points=1)
+    mon = AssumptionMonitor.for_model(g)
     viol = mon.check([[0.5]], [[0.5 + 0.5]])  # f jumped by 0.5
-    assert viol and viol[0].kind == "model" and viol[0].gap > 0.3
+    assert viol and viol[0].level == "cells" and viol[0].gap > 0.3 and viol[0].witness is None
 
 
 # ---------------------------------------------------------------------- responses
@@ -210,18 +215,18 @@ def test_observe_uses_g_and_features():
     assert bad and bad[0].output == 1
 
 
-def test_max_points_and_reported_gaps_are_real():
+def test_reported_gaps_are_real():
     rng = np.random.default_rng(11)
     Z, y = noisy(rng, lambda Z: -Z[:, 0], 600, 1, 0.01)
-    mon = AssumptionMonitor.monotone(None, -0.01, 0.01, m=1, n=1, max_points=50)
+    mon = AssumptionMonitor.monotone(None, -0.01, 0.01, m=1, n=1)
     viol = mon.check(Z, y)
-    assert mon.n_points == 50 and viol
+    assert viol
     for v in viol:  # each gap is witnessed by an actual pair of the data
         w = v.witness
         a, b = y[v.index], y[w]
         dz = Z[v.index, 0] - Z[w, 0]
         gap = (a - b if dz <= 0 else b - a) - 0.02
-        assert np.isclose(gap, v.gap)
+        assert np.isclose(gap, v.gap) and v.level == "full" and v.found_at == v.index
 
 
 def test_input_validation():
@@ -236,3 +241,17 @@ def test_input_validation():
         mon.check(np.zeros((2, 2)), np.zeros(2))
     with pytest.raises(TypeError):
         AssumptionMonitor.for_model(object())
+    with pytest.raises(ValueError):  # slope_hi = -inf means nothing
+        AssumptionMonitor([[-np.inf]], [[-np.inf]])
+    with pytest.raises(ValueError):  # a sign has no scale
+        AssumptionMonitor([[0.0]], [[np.inf]], widen=("slope_hi", 0, 0), slope_limit=5.0)
+    with pytest.raises(ValueError):  # a slope target needs a limit
+        AssumptionMonitor([[0.0]], [[1.0]], widen=("slope_hi", 0, 0))
+    with pytest.raises(ValueError):
+        AssumptionMonitor([[0.0]], [[1.0]], full="never")
+    with pytest.raises(ValueError):
+        AssumptionMonitor([[0.0]], [[1.0]]).check([[np.nan]], [0.0])
+    P = RectangularPartition.uniform([0], [1], [4])
+    psm = PartitionedSimulatingMap.from_data([[0.1], [0.9]], [0.1, 0.9], P, 0, 0.01)
+    with pytest.raises(ValueError):  # monotone models widen the disturbance only
+        AssumptionMonitor.for_model(psm, widen=("slope_hi", 0, 0), slope_limit=1.0)
