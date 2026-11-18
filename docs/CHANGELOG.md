@@ -1,6 +1,14 @@
 # Changelog
 
-## Unreleased
+## Unreleased (0.12.1)
+
+The toolbox code is the same as 0.12.0; this release adds ready-made packages and the documentation site.
+
+**Pre-built packages**
+- Python wheels for CPython 3.10–3.15 on Linux (x86_64, ARM), macOS (Apple silicon, Intel; macOS 14 or newer) and Windows (x86_64): `pip install ddma`. Each contains the compiled kernels with threads and the OpenMP runtime, so no compiler and no Homebrew `libomp` is needed. Every wheel passes the whole test suite in CI and is checked again on a clean machine.
+- MATLAB toolbox `ddma-<version>.mltbx` (R2023b or newer) with pre-built MEX files for Linux, Windows and macOS (Apple silicon), attached to each GitHub release. The MEX files are built and tested in MATLAB R2023b on all three systems.
+- `build_mex`: the environment variable `DDMA_MEX_CXX` chooses the C++ compiler (Linux, macOS); MEX files built with an older GCC also load in older MATLAB releases.
+- Workflow `.github/workflows/packages.yml`: builds and tests all packages; on a version tag it publishes the wheels to PyPI (Trusted Publishing, after approval) and attaches the toolbox to a GitHub release. `pyproject.toml`: SPDX license, project links, supported Python versions.
 
 **Documentation site** (`docs/`, Sphinx + MyST-NB)
 - Seven tutorials, executed on every build: the minimal simulating map of a scalar function; from data to a certified safe controller (cruise control, safety filter, reach-avoid); bounded-derivative models (the five methods on the pendulum, estimating derivative bounds); online learning (local and batch updates, `refresh`, `known_winning`, lazy abstractions); a learning agent inside a safety filter; safe envelopes without a grid; the assumption monitor. Each ends with the MATLAB version of its main calls, run under Octave in CI (`docs/check_matlab_snippets.py`).

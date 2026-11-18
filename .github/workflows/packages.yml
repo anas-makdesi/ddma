@@ -205,3 +205,60 @@ jobs:
         with:
           name: mltbx
           path: ddma-*.mltbx
+
+  # ---- only on a version tag (git tag vX.Y.Z && git push origin vX.Y.Z) ----
+
+  publish:
+    # Uploads the sdist and the wheels to PyPI with Trusted Publishing: PyPI trusts this
+    # workflow in this repository, so no password or token is stored anywhere. The job
+    # waits for approval in the GitHub environment "pypi" (Settings -> Environments).
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [sdist, wheels, clean-install]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/ddma/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: the tag must match the version in pyproject.toml
+        run: |
+          v=$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
+          test "v$v" = "${GITHUB_REF_NAME}" || { echo "tag ${GITHUB_REF_NAME} but version $v"; exit 1; }
+      - uses: actions/download-artifact@v4
+        with:
+          path: all
+      - run: mkdir dist && cp all/sdist/* all/wheels-*/* dist/ && ls -l dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  release:
+    # Creates the GitHub release page of the tag, with the MATLAB toolbox and the sdist
+    # attached (the wheels are on PyPI).
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [mltbx, sdist]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: the tag must match the version in pyproject.toml
+        run: |
+          v=$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
+          test "v$v" = "${GITHUB_REF_NAME}" || { echo "tag ${GITHUB_REF_NAME} but version $v"; exit 1; }
+      - uses: actions/download-artifact@v4
+        with:
+          path: all
+      - run: mkdir assets && cp all/mltbx/* all/sdist/* assets/ && ls -l assets
+      - name: create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notes.md <<NOTES
+          **Python:** \`pip install ddma==${GITHUB_REF_NAME#v}\` (pre-built for Linux, macOS and Windows; see [PyPI](https://pypi.org/project/ddma/)).
+
+          **MATLAB (R2023b or newer):** download \`ddma-${GITHUB_REF_NAME#v}.mltbx\` below and open it in MATLAB.
+
+          What changed: [CHANGELOG](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/docs/CHANGELOG.md). Documentation: https://anas-makdesi.github.io/ddma/
+          NOTES
+          gh release create "${GITHUB_REF_NAME}" assets/* --title "ddma ${GITHUB_REF_NAME#v}" --notes-file notes.md --verify-tag
