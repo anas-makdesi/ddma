@@ -32,6 +32,7 @@ import numpy as np
 import ddma
 from ddma import AssumptionMonitor, PartitionedSimulatingMap, RectangularPartition, check_data
 from ddma import _monitor_kernels as npk
+from ddma.monitor import slopes_from_signs
 from ddma.partitioned import _core
 
 T, M, F0, F1, F2 = 0.5, 1370.0, 51.0, 1.2567, 0.4342
@@ -66,6 +67,65 @@ def per_point(f, Zq, Yq, reps=3):
     return best(run, reps) / len(Zq)
 
 
+def measure(K, nt, Z, Y, Zq, Yq, sigma, lo, hi, theta):
+    """One row of the table: K stored points, nt threads."""
+    ddma.set_num_threads(nt)
+    st = np.zeros(K + 1, np.uint8)
+    r = {"K": K, "threads": nt, "cells": int(_core.monitor_grid(Z, Y)[7].size)}
+    r["cells_ms"] = 1e3 * per_point(lambda z, y: sigma.bounds(z[None]), Zq, Yq)
+    sidx = np.random.default_rng(2).integers(0, K, 2000)
+    r["sample_ms"] = 1e3 * per_point(
+        lambda z, y: _core.monitor_list(lo, hi, theta, 1e-9, Z, Y, z, y, sidx, st), Zq, Yq)
+    # level 3 for one new point: store it as point K, check it against [0, K)
+    Zb = np.vstack([Z, Zq[:1]])
+    Yb = np.vstack([Y, Yq[:1]])
+    gb = _core.monitor_grid(Zb, Yb)[:10]
+
+    def full(z, y, prune):
+        Zb[K], Yb[K] = z, y
+        return _core.monitor_full(lo, hi, theta, 1e-9, Zb, Yb, st, K, K + 1,
+                                  gb if prune else None, prune)
+
+    r["full_ms"] = 1e3 * per_point(lambda z, y: full(z, y, True), Zq[:50], Yq[:50])
+    r["pairs_per_point"] = int(full(Zq[0], Yq[0], True)[5])
+    r["full_noprune_ms"] = 1e3 * per_point(lambda z, y: full(z, y, False), Zq[:5], Yq[:5], 2)
+    # the whole step, through the monitor: median and largest time per step
+    mon = AssumptionMonitor.for_model(sigma, Z, Y)
+    ts = []
+    for z, y in zip(Zq, Yq):
+        t0 = time.perf_counter()
+        mon.check(z[None], y[None])
+        ts.append(time.perf_counter() - t0)
+    r["step_ms"] = 1e3 * float(np.median(ts))
+    r["step_max_ms"] = 1e3 * float(np.max(ts))
+    # back at base: 500 pending points at once
+    Zr, Yr = data(500, 3)
+
+    def back():
+        m2 = AssumptionMonitor(lo, hi, D_LO, D_HI, full="later", sample=0)
+        m2.add(Z, Y)
+        m2.check(Zr, Yr)
+        t0 = time.perf_counter()
+        m2.flush()
+        return time.perf_counter() - t0
+
+    r["flush500_s"] = min(back() for _ in range(2))
+    r["check_data_s"] = best(lambda: check_data(Z, Y, d_lo=D_LO, d_hi=D_HI, signs=SIGNS),
+                             2 if K < 10**6 else 1)
+    if K <= 20_000:
+        r["check_data_noprune_s"] = best(lambda: check_data(
+            Z, Y, d_lo=D_LO, d_hi=D_HI, signs=SIGNS, prune=False), 1)
+    return r
+
+
+def numpy_full(K, Z, Y, Zq, Yq, lo, hi, theta):
+    """Round 1's cost: NumPy, one point against every stored point."""
+    st = np.zeros(K, np.uint8)
+    idx = np.arange(K)
+    return 1e3 * per_point(lambda z, y: npk.monitor_list(lo, hi, theta, 1e-9, Z, Y, z, y, idx,
+                                                         st), Zq[:5], Yq[:5], 1)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--sizes", type=int, nargs="*", default=[20_000, 200_000, 2_000_000])
@@ -75,74 +135,20 @@ def main():
     if _core is None:
         raise SystemExit("the compiled kernel is not installed")
     threads = a.threads or sorted({1, ddma.get_num_threads()})
-    lo, hi = ddma.slopes_from_signs(SIGNS, 2, 2) if hasattr(ddma, "slopes_from_signs") else \
-        __import__("ddma.monitor", fromlist=["x"]).slopes_from_signs(SIGNS, 2, 2)
-    lo, hi = np.ascontiguousarray(lo), np.ascontiguousarray(hi)
+    lo, hi = (np.ascontiguousarray(x) for x in slopes_from_signs(SIGNS, 2, 2))
     theta = D_HI - D_LO
+    part = RectangularPartition.uniform([0, -3], [30, 3], [60, 24])
     rows = []
     for K in a.sizes:
         Z, Y = data(K, 0)
         Zq, Yq = data(200, 1)
-        part = RectangularPartition.uniform([0, -3], [30, 3], [60, 24])
         sigma = PartitionedSimulatingMap.from_data(Z, Y, part, D_LO, D_HI, signs=SIGNS)
-        st = np.zeros(K + 1, np.uint8)
-        grid = _core.monitor_grid(Z, Y)
-        cells = int(grid[7].size)
         for nt in threads:
-            ddma.set_num_threads(nt)
-            r = {"K": K, "threads": nt, "cells": cells}
-            r["cells_ms"] = 1e3 * per_point(lambda z, y: sigma.bounds(z[None]), Zq, Yq)
-            sidx = np.random.default_rng(2).integers(0, K, 2000)
-            r["sample_ms"] = 1e3 * per_point(
-                lambda z, y: _core.monitor_list(lo, hi, theta, 1e-9, Z, Y, z, y, sidx, st), Zq, Yq)
-            # level 3 for one new point: store it as point K, check it against [0, K)
-            Zb = np.vstack([Z, Zq[:1]])
-            Yb = np.vstack([Y, Yq[:1]])
-            gb = _core.monitor_grid(Zb, Yb)[:10]
-
-            def full(z, y, prune):
-                Zb[K], Yb[K] = z, y
-                return _core.monitor_full(lo, hi, theta, 1e-9, Zb, Yb, st, K, K + 1,
-                                          gb if prune else None, prune)
-
-            r["full_ms"] = 1e3 * per_point(lambda z, y: full(z, y, True), Zq[:50], Yq[:50])
-            r["pairs_per_point"] = int(full(Zq[0], Yq[0], True)[5])
-            r["full_noprune_ms"] = 1e3 * per_point(lambda z, y: full(z, y, False), Zq[:5],
-                                                   Yq[:5], 2)
-            # the whole step, through the monitor: median and largest time per step
-            mon = AssumptionMonitor.for_model(sigma, Z, Y)
-            ts = []
-            for z, y in zip(Zq, Yq):
-                t0 = time.perf_counter()
-                mon.check(z[None], y[None])
-                ts.append(time.perf_counter() - t0)
-            r["step_ms"] = 1e3 * float(np.median(ts))
-            r["step_max_ms"] = 1e3 * float(np.max(ts))
-            # back at base: 500 pending points at once
-            Zr, Yr = data(500, 3)
-
-            def back():
-                m2 = AssumptionMonitor(lo, hi, D_LO, D_HI, full="later", sample=0)
-                m2.add(Z, Y)
-                m2.check(Zr, Yr)
-                t0 = time.perf_counter()
-                m2.flush()
-                return time.perf_counter() - t0
-
-            r["flush500_s"] = min(back() for _ in range(2))
-            r["check_data_s"] = best(lambda: check_data(Z, Y, d_lo=D_LO, d_hi=D_HI,
-                                                        signs=SIGNS), 2 if K < 10**6 else 1)
-            if K <= 20_000:
-                r["check_data_noprune_s"] = best(lambda: check_data(
-                    Z, Y, d_lo=D_LO, d_hi=D_HI, signs=SIGNS, prune=False), 1)
-            rows.append(r)
-            print(json.dumps(r), flush=True)
-        if K <= 200_000:  # round 1's cost: NumPy, one thread, every pair
-            ddma.set_num_threads(1)
-            t = 1e3 * per_point(lambda z, y: npk.monitor_list(lo, hi, theta, 1e-9, Z, Y, z, y,
-                                                              np.arange(K), st), Zq[:5], Yq[:5], 1)
-            print(json.dumps({"K": K, "numpy_full_ms": t}), flush=True)
-            rows.append({"K": K, "numpy_full_ms": t})
+            rows.append(measure(K, nt, Z, Y, Zq, Yq, sigma, lo, hi, theta))
+            print(json.dumps(rows[-1]), flush=True)
+        ddma.set_num_threads(1)
+        rows.append({"K": K, "numpy_full_ms": numpy_full(K, Z, Y, Zq, Yq, lo, hi, theta)})
+        print(json.dumps(rows[-1]), flush=True)
     if a.json:
         with open(a.json, "w") as f:
             json.dump(rows, f, indent=1)

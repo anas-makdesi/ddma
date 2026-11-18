@@ -33,11 +33,11 @@ import numpy as np
 
 from ddma import (
     AssumptionMonitor,
-    check_data,
     PartitionedSimulatingMap,
     RectangularPartition,
     SymbolicAbstraction,
     affine_bounds,
+    check_data,
     safety,
     transitions_to_data,
 )
