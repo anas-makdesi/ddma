@@ -11,9 +11,10 @@ pip install "ddma[rl]"          # + gymnasium (the safety filter for reinforceme
 ```
 
 Pre-built packages (wheels) exist for CPython 3.10 to 3.15 on Linux (x86_64 and ARM),
-macOS (Apple silicon and Intel) and Windows (x86_64). They contain the compiled C++ kernels
-and the OpenMP runtime, so nothing else is needed, also on macOS. On other systems pip builds
-the kernels from source.
+macOS (Apple silicon: macOS 15 or newer; Intel: macOS 14 or newer) and Windows (x86_64).
+They contain the compiled C++ kernels and the OpenMP runtime, so nothing else is needed, also
+on macOS. On other systems (including macOS 14 on Apple silicon) pip builds the kernels from
+source: that needs a C++ compiler, and on macOS `brew install libomp` for threads.
 
 From a clone of the repository, to run the examples and tests or to change the code:
 

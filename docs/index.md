@@ -50,10 +50,14 @@ around any other one.
 ## Install
 
 ```bash
-pip install -e .     # from a clone; builds the C++ kernels if a compiler is available
+pip install ddma
 ```
 
-Details, including MATLAB and OpenMP on macOS: {doc}`getting-started/installation`.
+MATLAB (R2023b or newer): download `ddma-<version>.mltbx` from the
+[releases page](https://github.com/anas-makdesi/ddma/releases) and open it in MATLAB.
+
+Details, including Octave, installing from a clone and supported systems:
+{doc}`getting-started/installation`.
 
 ```{toctree}
 :hidden:
@@ -86,6 +90,7 @@ guides/envelopes
 guides/monitor
 guides/performance
 guides/reproduction
+guides/testing
 ```
 
 ```{toctree}

@@ -14,5 +14,6 @@ Planned work, roughly in order. Contributions and suggestions are welcome throug
 - Non-uniform and adaptive partitions that refine where the specification is decided.
 
 ## Distribution
-- Pre-built wheels on PyPI, so no compiler is needed.
-- MATLAB toolbox file (.mltbx) with pre-built MEX files for Windows, macOS and Linux.
+Pre-built wheels and the MATLAB toolbox file are available since 0.12.1. Still to come:
+- Wheels for macOS 14 on Apple silicon (today pip builds from source there).
+- Wheels for musl-based Linux (Alpine) and for free-threaded Python.

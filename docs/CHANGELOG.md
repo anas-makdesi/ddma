@@ -1,11 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- README rewritten for first-time visitors (GitHub and PyPI): install first, one short example in Python and MATLAB, the tutorials listed instead of repeated; all links and figures absolute, so they also work on the PyPI page.
+- Corrected: the Apple-silicon wheels of 0.12.1 need macOS 15 or newer (not 14); on macOS 14 with Apple silicon pip builds from source.
+- Roadmap: wheels and the MATLAB toolbox moved from planned to done; the remaining packaging items listed.
+- Documentation: new guide "How it's tested"; the home page's install section shows `pip install ddma` and the MATLAB toolbox.
+
 ## 0.12.1 (19 November 2026)
 
 The toolbox code is the same as 0.12.0; this release adds ready-made packages and the documentation site.
 
 **Pre-built packages**
-- Python wheels for CPython 3.10–3.15 on Linux (x86_64, ARM), macOS (Apple silicon, Intel; macOS 14 or newer) and Windows (x86_64): `pip install ddma`. Each contains the compiled kernels with threads and the OpenMP runtime, so no compiler and no Homebrew `libomp` is needed. Every wheel passes the whole test suite in CI and is checked again on a clean machine.
+- Python wheels for CPython 3.10–3.15 on Linux (x86_64, ARM), macOS (Apple silicon: macOS 15 or newer; Intel: macOS 14 or newer) and Windows (x86_64): `pip install ddma`. Each contains the compiled kernels with threads and the OpenMP runtime, so no compiler and no Homebrew `libomp` is needed. Every wheel passes the whole test suite in CI and is checked again on a clean machine.
 - MATLAB toolbox `ddma-<version>.mltbx` (R2023b or newer) with pre-built MEX files for Linux, Windows and macOS (Apple silicon), attached to each GitHub release. The MEX files are built and tested in MATLAB R2023b on all three systems.
 - `build_mex`: the environment variable `DDMA_MEX_CXX` chooses the C++ compiler (Linux, macOS); MEX files built with an older GCC also load in older MATLAB releases.
 - Workflow `.github/workflows/packages.yml`: builds and tests all packages; on a version tag it publishes the wheels to PyPI (Trusted Publishing, after approval) and attaches the toolbox to a GitHub release. `pyproject.toml`: SPDX license, project links, supported Python versions.
