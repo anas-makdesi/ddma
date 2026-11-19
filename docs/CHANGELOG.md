@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.12.2 (19 November 2026)
+
+The toolbox code is the same as 0.12.1; this release updates the package description shown on PyPI.
 
 - README rewritten for first-time visitors (GitHub and PyPI): install first, one short example in Python and MATLAB, the tutorials listed instead of repeated; all links and figures absolute, so they also work on the PyPI page.
 - Corrected: the Apple-silicon wheels of 0.12.1 need macOS 15 or newer (not 14); on macOS 14 with Apple silicon pip builds from source.
