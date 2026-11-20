@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.12.3 (20 November 2026)
+
+The Python code is the same as 0.12.2. In MATLAB, partition edges and random integers no longer depend on the Octave or MATLAB version, so results can differ slightly from 0.12.2 where data points lie exactly on cell edges.
 
 - New `reproductions/check_numbers.py`: runs the examples and paper reproductions (and the MATLAB examples with fixed data under Octave) and compares everything they print, apart from timings and file paths, with references in `reproductions/expected/`. CI runs the quick set on every push, the MATLAB examples in the Octave job, and all reproductions on manual runs. Checked when it was added: v0.10.0 and v0.12.2 print the same numbers.
 - MATLAB: random integers are drawn with `ddma.internal.rand_int` (from `rand`) instead of `randi`, whose algorithm differs between Octave versions; seeded examples such as `rl_safety_filter.m` now give the same numbers in every Octave version (`controller_input(..., 'random')`, `estimate_derivative_bounds`, the examples).
