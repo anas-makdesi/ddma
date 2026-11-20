@@ -104,6 +104,10 @@ jobs:
       - name: build MEX and run the MATLAB tests (against Python reference results)
         working-directory: matlab
         run: octave --no-gui --eval "build_mex; addpath tests; run_tests; run_threads_tests; run_abstraction_tests; run_monitor_tests; run examples/acc_safety_filter; clear; run examples/assumption_monitor; clear; run examples/pendulum_bounded_derivatives; clear; run examples/online_refinement; clear; run examples/scalar_map; clear; run examples/bounded_derivative_map; clear; K = 20; run examples/lazy_synthesis; clear; run examples/rl_safety_filter"
+      - name: TEMPORARY probe online_refinement
+        continue-on-error: true
+        working-directory: matlab
+        run: octave --no-gui tests/probe_online.m
       - name: gridless safe envelopes (MATLAB tests against Python, examples)
         working-directory: matlab
         run: octave --no-gui --eval "addpath tests; run_invariance_tests; run examples/envelope_room_cooling; clear; run examples/envelope_nonlinear"
