@@ -1,0 +1,22 @@
+exp1 N=100,000  time <t>  mu 397
+exp1 N=200,000  time <t>  mu 360
+exp1 N=300,000  time <t>  mu 346
+exp1 N=400,000  time <t>  mu 336
+exp1 N=500,000  time <t>  mu 329
+exp1 N=600,000  time <t>  mu 324
+exp1 N=700,000  time <t>  mu 320
+exp1 N=800,000  time <t>  mu 317
+exp2 k= 4 inner state cells     64  time <t>  mu 46019
+exp2 k= 6 inner state cells    216  time <t>  mu 16890
+exp2 k= 8 inner state cells    512  time <t>  mu 8171
+exp2 k=10 inner state cells  1,000  time <t>  mu 4706
+exp2 k=12 inner state cells  1,728  time <t>  mu 2930
+exp2 k=14 inner state cells  2,744  time <t>  mu 2082
+exp2 k=16 inner state cells  4,096  time <t>  mu 1544
+exp2 k=18 inner state cells  5,832  time <t>  mu 1245
+exp2 k=20 inner state cells  8,000  time <t>  mu 1077
+exp2 k=22 inner state cells 10,648  time <t>  mu 950
+exp2 k=24 inner state cells 13,824  time <t>  mu 895
+exp2 k=26 inner state cells 17,576  time <t>  mu 806
+synthesis: 22528 x 14 abstraction, controllable set 72.5% of the safe cells; times map <t>, abstraction <t>, synthesis <t>
+closed loop: 200 runs x 300 steps, violations: 0

@@ -1,0 +1,23 @@
+Data check: 50000 points, all consistent with the assumptions.
+certified safe set: 38% of the specification
+--- slow leader, no monitor: min gap 8.6 m, 51 steps outside the specification
+  refit at t=75.0sec: certified safe set 30%
+--- slow leader, monitor: min gap 9.6 m, 2 steps outside the specification
+first alarm at t=75.0sec (event at t=75.0sec), caught by level 'cells'
+Assumption monitor: 500 transitions checked, 1 inconsistent with the assumptions (first: #151).
+Found by: cells 1, sample 0, full check 0. Quarantined points: 0.
+gap update: 1 violation, worst 1 beyond the assumptions.
+  Found through the model's cell bounds only: at least the disturbance width must grow by the gap.
+Assumptions widened (the model must be refit; its guarantees now rest on bounds fitted to the data):
+   - disturbance width of gap update: 2 -> 3.2 at transition 151
+--- trailer, no monitor: min gap 9.4 m, 8 steps outside the specification
+--- trailer, monitor: min gap 10.9 m, 0 steps outside the specification
+first alarm at t=75.0sec (event at t=75.0sec), caught by level 'full'
+Assumption monitor: 500 transitions checked, 331 inconsistent with the assumptions (first: #151).
+Found by: cells 199, sample 0, full check 132. Quarantined points: 331.
+speed update: 331 violations, worst 0.888 beyond the assumptions.
+  Any one of these changes alone makes all data consistent:
+   - disturbance width 0.1 -> 1.155
+   - lower slope bound w.r.t. v 0 -> -1.437e+05 (contradicts 'non-decreasing')
+  Cannot explain the data on their own: upper slope bound w.r.t. v, lower slope bound w.r.t. u, upper slope bound w.r.t. u.
+Fallback active since #151: disturbance width of speed update would need 0.2767, beyond the limit 0.2 (2 x the original 0.1).

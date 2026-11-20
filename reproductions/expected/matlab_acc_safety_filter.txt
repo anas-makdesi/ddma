@@ -1,0 +1,4 @@
+times: fit <t>, abstraction <t>, synthesis <t>
+certified safe region: 38.1% of the specification cells
+nominal controller alone: collision at t=11.0sec
+with safety filter: 400 steps, minimum gap 11.5 m, no violation

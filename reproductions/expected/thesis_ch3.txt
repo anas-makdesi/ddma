@@ -1,0 +1,6 @@
+1: 2 matrix      mu(10^7) = 2.514   mu(10^3) = 3.82   fit time at 10^7: <t>   sound: True
+2: All matrix    mu(10^7) = 2.313   mu(10^3) = 3.28   fit time at 10^7: <t>   sound: True
+3: Lin + Mono    mu(10^7) = 2.010   mu(10^3) = 3.12   fit time at 10^7: <t>   sound: True
+4: Growth        mu(10^7) = 2.305   mu(10^3) = 3.10   fit time at 10^7: <t>   sound: True
+5: Lin + Growth  mu(10^7) = 1.966   mu(10^3) = 2.81   fit time at 10^7: <t>   sound: True
+saved <path>

@@ -1,0 +1,8 @@
+1e+06 transitions, 10201 state cells x 25 inputs
+method       model [s] abstr. [s] safety [s]  invariant (% of cells)  closed loop
+two_matrix  <t> <t> <t>  16.1%  0 violations / 100 runs
+all_matrix  <t> <t> <t>  17.4%  0 violations / 100 runs
+lin_mono  <t> <t> <t>  17.6%  0 violations / 100 runs
+growth  <t> <t> <t>  17.6%  0 violations / 100 runs
+lin_growth  <t> <t> <t>  17.8%  0 violations / 100 runs
+saved <path>

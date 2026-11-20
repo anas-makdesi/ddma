@@ -1,0 +1,8 @@
+samples   winning set (% of safe cells)   map / abstraction / synthesis [s]
+   2000     26.7                           <t> / <t> / <t>
+  20000     37.1                           <t> / <t> / <t>
+ 200000     38.1                           <t> / <t> / <t>
+abstraction: 6600 state cells x 24 input cells
+nominal controller alone: gap below 10 m at t=9.0sec, collision at t=11.5sec
+with safety filter:       min gap 11.2 m, no violation in 400 steps; filter modified the input in 92% of steps
+saved figures in <path>

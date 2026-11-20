@@ -25,6 +25,23 @@ jobs:
       - name: gridless safe envelopes (examples)
         run: MPLBACKEND=Agg python examples/envelope_room_cooling.py 300 && MPLBACKEND=Agg python examples/envelope_nonlinear.py
 
+  numbers:
+    # the examples and paper reproductions must still print the same numbers
+    # (reproductions/expected/); the slow reproductions run on manual runs only
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - name: examples and quick reproductions
+        if: github.event_name != 'workflow_dispatch'
+        run: python reproductions/check_numbers.py
+      - name: examples and all reproductions
+        if: github.event_name == 'workflow_dispatch'
+        run: python reproductions/check_numbers.py --full
+
   docs:
     # API reference + tutorials; the notebooks are executed, so a stale tutorial fails CI
     runs-on: ubuntu-latest
@@ -90,5 +107,7 @@ jobs:
       - name: gridless safe envelopes (MATLAB tests against Python, examples)
         working-directory: matlab
         run: octave --no-gui --eval "addpath tests; run_invariance_tests; run examples/envelope_room_cooling; clear; run examples/envelope_nonlinear"
+      - name: MATLAB examples print the same numbers (reproductions/expected/matlab_*)
+        run: python3 reproductions/check_numbers.py --matlab
       - name: MATLAB snippets of the documentation tutorials
         run: python3 docs/check_matlab_snippets.py
