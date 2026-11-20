@@ -1,0 +1,4 @@
+fit 4-D grid (6,765,201 cells): <t>; (vf,u) grid: <t>
+abstraction 132,651 x 51 in <t>; safety <t>
+controllable set: 27.9% of the safe cells
+closed loop: 200 runs x 300 steps, violations: 0

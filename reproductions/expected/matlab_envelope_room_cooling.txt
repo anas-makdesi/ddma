@@ -1,0 +1,2 @@
+envelope: <t>, 1000 transitions, 7 corners, certifies 98.5% of the safe box
+closed loop, 300 starts x 100 steps: 0 violations

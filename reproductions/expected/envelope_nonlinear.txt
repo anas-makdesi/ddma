@@ -1,0 +1,5 @@
+competition: 400 transitions, 79,800 pairs in <t> -> 234 invariant boxes, 83.8% of the domain
+  closed loop, 300 starts x 40 steps: 0 violations
+10-D chain: 1000 transitions, 499,500 pairs in <t> -> 2 invariant boxes
+  every box checked: 2,000 random states x 50 steps stay inside
+figure: envelope_nonlinear.png

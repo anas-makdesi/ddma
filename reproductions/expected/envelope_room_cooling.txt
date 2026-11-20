@@ -1,0 +1,13 @@
+  envelope:     <t>, 1,000 transitions, 13 corners, certifies 97.8% of the safe box
+  abstraction:  <t>, 200,000 transitions, 30^3 x 21 cells, certifies 74.5% of the safe box
+  corners (deg C) and the least cooling each needs:
+    [21.36 25.06 25.68]  u >= 0.77
+    [21.91 23.94 25.65]  u >= 0.49
+    [22.11 24.56 25.65]  u >= 0.51
+    [22.24 24.   25.65]  u >= 0.61
+    [22.8  25.92 25.78]  u >= 0.89
+    [22.88 24.64 25.87]  u >= 0.65
+    [23.7  25.91 25.65]  u >= 0.63
+    [24.93 22.2  25.98]  u >= 0.93
+  closed loop, 500 starts x 200 steps: hottest room 25.07 C (limit 26.0), 0 violations, mean cooling 0.41
+  figure: envelope_room_cooling.png

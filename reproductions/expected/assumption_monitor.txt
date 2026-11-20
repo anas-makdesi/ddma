@@ -1,0 +1,62 @@
+learning data checked (200,000 points, every pair) in <t>: Data check: 200000 points, all consistent with the assumptions.
+learned from 200,000 transitions in <t>; certified safe set: 38 % of the specification
+
+--- slow leader, no monitor (<t>): min gap 8.8 m, outside the specification for 54 steps (first at t=76.0sec)
+left the certified domain at t=76.0sec
+
+--- slow leader, monitor (<t>): min gap 9.0 m, outside the specification for 3 steps (first at t=76.0sec)
+event at t=75.0sec, first alarm at t=75.0sec (1 transitions later)
+left the certified domain at t=75.5sec
+  refit at t=75.0sec: certified safe set 32 %
+  refit at t=75.5sec: certified safe set 30 %
+monitor check per step (all 200,000 learning points + run): median <t>, max <t>
+caught by (level, transition, found at):
+  cells  t=75.0sec (gap update), found 0 steps later, gap 0.768
+  cells  t=75.5sec (gap update), found 0 steps later, gap 0.079
+At the first alarm:
+Assumption monitor: 151 transitions checked, 1 inconsistent with the assumptions (first: #150).
+Found by: cells 1, sample 0, full check 0. Quarantined points: 1.
+gap update: 1 violation, worst 0.7675 beyond the assumptions.
+  Any one of these changes alone makes all data consistent:
+   - disturbance width 2 -> 2.768
+  Cannot explain the data on their own: lower slope bound w.r.t. v, upper slope bound w.r.t. v, lower slope bound w.r.t. u, upper slope bound w.r.t. u.
+At the end:
+Assumption monitor: 500 transitions checked, 2 inconsistent with the assumptions (first: #150).
+Found by: cells 2, sample 0, full check 0. Quarantined points: 0.
+gap update: 2 violations, worst 0.7675 beyond the assumptions.
+  Found through the model's cell bounds only: at least the disturbance width must grow by the gap.
+Assumptions widened (the model must be refit; its guarantees now rest on bounds fitted to the data):
+   - disturbance width of gap update: 2 -> 2.921 at transition 150
+   - disturbance width of gap update: 2.921 -> 3.016 at transition 151
+
+--- trailer, no monitor (<t>): min gap 9.5 m, outside the specification for 6 steps (first at t=185.0sec)
+left the certified domain at t=102.0sec
+
+--- trailer, monitor (<t>): min gap 11.3 m, specification never violated
+event at t=75.0sec, first alarm at t=75.0sec (1 transitions later)
+monitor check per step (all 200,000 learning points + run): median <t>, max <t>
+caught by (level, transition, found at):
+  full   t=75.0sec (speed update), found 0 steps later, gap 0.197
+  cells  t=75.5sec (speed update), found 0 steps later, gap 0.259
+  cells  t=76.0sec (speed update), found 0 steps later, gap 0.771
+  cells  t=76.5sec (speed update), found 0 steps later, gap 0.444
+  full   t=77.0sec (speed update), found 0 steps later, gap 0.133
+  full   t=77.5sec (speed update), found 0 steps later, gap 0.113
+  ... 329 more
+At the first alarm:
+Assumption monitor: 151 transitions checked, 1 inconsistent with the assumptions (first: #150).
+Found by: cells 0, sample 0, full check 1. Quarantined points: 1.
+speed update: 1 violation, worst 0.1968 beyond the assumptions.
+  Any one of these changes alone makes all data consistent:
+   - disturbance width 0.1 -> 0.2968
+   - lower slope bound w.r.t. v 0 -> -1093 (contradicts 'non-decreasing')
+  Cannot explain the data on their own: upper slope bound w.r.t. v, lower slope bound w.r.t. u, upper slope bound w.r.t. u.
+At the end:
+Assumption monitor: 500 transitions checked, 335 inconsistent with the assumptions (first: #150).
+Found by: cells 190, sample 0, full check 145. Quarantined points: 335.
+speed update: 335 violations, worst 0.9033 beyond the assumptions.
+  Any one of these changes alone makes all data consistent:
+   - disturbance width 0.1 -> 1.195
+   - lower slope bound w.r.t. v 0 -> -1.002e+06 (contradicts 'non-decreasing')
+  Cannot explain the data on their own: upper slope bound w.r.t. v, lower slope bound w.r.t. u, upper slope bound w.r.t. u.
+Fallback active since #150: disturbance width of speed update would need 0.2968, beyond the limit 0.2 (2 x the original 0.1).

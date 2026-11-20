@@ -1,0 +1,4 @@
+90,601 states x 301 inputs = 27,270,901 pairs
+times: map <t>, abstraction <t>, invariant <t> (paper: <t> + <t>)
+maximal controlled invariant: 63.5% of the safe set (by area)
+closed loop: 200 runs x 500 steps, violations: 0

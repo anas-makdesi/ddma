@@ -1,0 +1,5 @@
+safety controller: 38.1 % of the specification cells
+random actions, no filter  :  20 violations in 20 episodes (  436 steps,     0 actions corrected)
+random actions, with filter:   0 violations in 20 episodes ( 8000 steps,  2557 actions corrected)
+full throttle , no filter  :  20 violations in 20 episodes (  169 steps,     0 actions corrected)
+full throttle , with filter:   0 violations in 20 episodes ( 8000 steps,  8000 actions corrected)

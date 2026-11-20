@@ -1,0 +1,17 @@
+bounds estimated in <t>
+J_x upper (data):
+ [[9.000e-01 1.000e-01 3.756e-06]
+ [3.706e-01 9.931e-01 9.420e-02]
+ [8.974e-02 8.958e-02 9.745e-01]]
+J_x lower (data):
+ [[ 9.000e-01  1.000e-01  3.756e-06]
+ [ 1.861e-01  9.872e-01 -9.489e-02]
+ [-9.064e-02 -8.987e-02  9.707e-01]]
+J_u upper/lower (data): [6.628e-08 9.965e-03 1.090e-04] [6.628e-08 9.965e-03 1.090e-04]
+w*T0 (data): [0.005 0.068 0.11 ]   true: [0.005, 0.005, 0.005]   paper: [0.005, 0.0585, 0.0576]
+Prop. 9 with beta = 1e-6: violation probability <= 1.38e-05 (paper: < 2e-5)
+  learned 5,000,000 samples (<t>)
+  learned 10,000,000 samples (<t>)
+1e+07 samples, 6,765,201 cells: model <t>, abstraction <t> (paper, 1e8 / 101^4: <t>), invariant <t>
+maximal controlled invariant: 0.0% of the cells
+closed loop: 200 runs x 500 steps, violations: 0

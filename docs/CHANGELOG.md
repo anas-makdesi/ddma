@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- New `reproductions/check_numbers.py`: runs the examples and paper reproductions (and the MATLAB examples under Octave) and compares everything they print, apart from timings and file paths, with references in `reproductions/expected/`. CI runs the quick set on every push, the MATLAB examples in the Octave job, and all reproductions on manual runs. Checked when it was added: v0.10.0 and v0.12.2 print the same numbers.
+
 ## 0.12.2 (19 November 2026)
 
 The toolbox code is the same as 0.12.1; this release updates the package description shown on PyPI.

@@ -1,0 +1,3 @@
+25 samples; mean width of the exact map on [0.5, 2.5]: 2.485
+mean width on the 8-cell partition (bounded cells): 3.614
+saved <path>

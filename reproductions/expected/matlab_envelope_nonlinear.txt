@@ -1,0 +1,3 @@
+competition: 79800 pairs in <t> -> 134 boxes, 81.5% of the domain
+closed loop, 200 starts x 40 steps: 0 violations
+10-D chain: 499500 pairs in <t> -> 1 invariant boxes

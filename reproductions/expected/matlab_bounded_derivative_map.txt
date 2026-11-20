@@ -1,0 +1,2 @@
+two_matrix  bounded on 100 % of [0, 2 pi], mean width where bounded 1.509
+lin_growth  bounded on 100 % of [0, 2 pi], mean width where bounded 1.324

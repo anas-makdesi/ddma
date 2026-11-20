@@ -1,0 +1,4 @@
+eager:  <t>, transitions evaluated    168000 of 168000, winning 16.6 % (safe set 21.6 %)
+lazy :  <t>, transitions evaluated     12514 of 168000, winning 16.6 %
+same winning set
+at T = [24 25 24.5]: cooling u = 0.262

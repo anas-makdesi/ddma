@@ -7,7 +7,7 @@ This report re-runs the numerical experiments of the three papers behind `ddma`,
 - **TAC 2024**: *Data-Driven Models of Monotone Systems*
 - **Thesis, Ch. 3**: A. Makdesi, *Data-driven abstractions for the safe learning of nonlinear systems*, Université Paris-Saclay, 2023, Chapter 3 (systems with bounded derivatives)
 
-Each experiment has a script in `reproductions/`. The results are saved as JSON and figures in `reproductions/results/`.
+Each experiment has a script in `reproductions/`. The results are saved as JSON and figures in `reproductions/results/`. The numbers reported below are checked in CI: `python reproductions/check_numbers.py --full` re-runs every script and compares its output with `reproductions/expected/` (timings excluded).
 
 **Hardware.** The `ddma` timings were measured on a 2-core cloud container with 8 GB RAM. The papers used MATLAB on a desktop (L4DC: Intel i7 at 2.9 GHz, 8 GB). Times are indicative only.
 
