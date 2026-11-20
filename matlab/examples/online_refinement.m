@@ -44,7 +44,7 @@ if ~any(domain), error('empty initial safe set: use more initial data (K, r0)');
 
 % run, learn, refine
 dom = find(domain);
-[lo, hi] = ddma.cell_bounds(Xedges, ddma.all_subs_of(A.shapeX, dom(randi(numel(dom)))));
+[lo, hi] = ddma.cell_bounds(Xedges, ddma.all_subs_of(A.shapeX, dom(ddma.internal.rand_int(1, numel(dom)))));
 x = lo + rand(1, 2) .* (hi - lo);
 batch = zeros(0, 5); viol = 0; t_ref = 0;
 for k = 1:1000

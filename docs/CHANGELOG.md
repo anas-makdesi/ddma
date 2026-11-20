@@ -3,6 +3,9 @@
 ## Unreleased
 
 - New `reproductions/check_numbers.py`: runs the examples and paper reproductions (and the MATLAB examples with fixed data under Octave) and compares everything they print, apart from timings and file paths, with references in `reproductions/expected/`. CI runs the quick set on every push, the MATLAB examples in the Octave job, and all reproductions on manual runs. Checked when it was added: v0.10.0 and v0.12.2 print the same numbers.
+- MATLAB: random integers are drawn with `ddma.internal.rand_int` (from `rand`) instead of `randi`, whose algorithm differs between Octave versions; seeded examples such as `rl_safety_filter.m` now give the same numbers in every Octave version (`controller_input(..., 'random')`, `estimate_derivative_bounds`, the examples).
+- MATLAB: `ddma.uniform_partition` and `ddma.margin_partition` compute their edges exactly as NumPy's `linspace` (new `ddma.internal.linspace_np`); Octave's `linspace` rounds the last bit differently from NumPy and between Octave versions (8.4 vs 11), so a data point on an edge could fall in another cell. `online_refinement.m` now gives the same numbers on every Octave version and is part of the check.
+- The saved results in `reproductions/results/` were regenerated with the scripts' defaults (some dated from before v0.3.0 or used fewer repetitions); the reported numbers are unchanged.
 
 ## 0.12.2 (19 November 2026)
 

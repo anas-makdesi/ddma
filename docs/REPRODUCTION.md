@@ -9,7 +9,7 @@ This report re-runs the numerical experiments of the three papers behind `ddma`,
 
 Each experiment has a script in `reproductions/`. The results are saved as JSON and figures in `reproductions/results/`. The numbers reported below are checked in CI: `python reproductions/check_numbers.py --full` re-runs every script and compares its output with `reproductions/expected/` (timings excluded).
 
-**Hardware.** The `ddma` timings were measured on a 2-core cloud container with 8 GB RAM. The papers used MATLAB on a desktop (L4DC: Intel i7 at 2.9 GHz, 8 GB). Times are indicative only.
+**Hardware.** The `ddma` timings in the summary were measured with v0.12.2 (2 threads) on a 2-core cloud container with 8 GB RAM, in November 2026; the tables under "Speed" are older measurements comparing versions. The papers used MATLAB on a desktop (L4DC: Intel i7 at 2.9 GHz, 8 GB). Times are indicative only.
 
 **Safety checks.** Every synthesized controller is also run in closed loop on the *true* plant: 200 random starting states × 300–500 steps, with random disturbances. A run counts as a violation if it leaves the specification or the controller's domain.
 
@@ -17,20 +17,20 @@ Each experiment has a script in `reproductions/`. The results are saved as JSON 
 
 | Paper, experiment | Paper reports | ddma | Verdict |
 |---|---|---|---|
-| **TAC V-A**, Fig. 9: µ vs number of data points (K = 100) | µ ≈ 2.7 → 2.47 from 10⁶ to 10⁷ points; time in seconds (axis up to 7 s) | µ = 2.703 → 2.470; 0.11 → 1.2 s | ✅ reproduced |
-| **TAC V-A**, Fig. 10: µ vs partition size (10⁶ points) | µ from ≈ 18 down to ≈ 2.7 at 10⁴ cells; 0.3–0.65 s | µ = 15.4 → 2.70 at 10,201 cells; 0.06–0.11 s | ✅ reproduced |
+| **TAC V-A**, Fig. 9: µ vs number of data points (K = 100) | µ ≈ 2.7 → 2.47 from 10⁶ to 10⁷ points; time in seconds (axis up to 7 s) | µ = 2.703 → 2.470; 0.08 → 0.8 s | ✅ reproduced |
+| **TAC V-A**, Fig. 10: µ vs partition size (10⁶ points) | µ from ≈ 18 down to ≈ 2.7 at 10⁴ cells; 0.3–0.65 s | µ = 15.4 → 2.70 at 10,201 cells; 0.05–0.09 s | ✅ reproduced |
 | **TAC V-A**, Fig. 8: map contains F | visual | contains F at 200,000 random queries | ✅ |
-| **TAC V-B**, cruise control, 10⁶ points, 51⁴ grid | fit 0.633 s; controllable set (Fig. 11) | fit 0.75 s on 4-D grid (0.10 s on the (v_f, u) grid); abstraction 2.1 s; synthesis 0.18 s; 27.9 % of the safe cells; **0 violations** | ✅ reproduced |
+| **TAC V-B**, cruise control, 10⁶ points, 51⁴ grid | fit 0.633 s; controllable set (Fig. 11) | fit 0.47 s on 4-D grid (0.10 s on the (v_f, u) grid); abstraction 0.20 s; synthesis 0.24 s; 27.9 % of the safe cells; **0 violations** | ✅ reproduced |
 | **TAC V-C**, Lorenz: derivative bounds (scenario LP) | J and w table | Close to the table: e.g. J₂₁ ∈ [0.183, 0.372] (paper [0.185, 0.377], true [0.18, 0.38]); w·T₀ = [0.003, 0.047, 0.035] (paper [0.005, 0.059, 0.058]) | ✅ with the LP weighting of note 3 |
-| **TAC V-C**, Lorenz: abstraction + invariant | 10⁸ points, 101⁴ cells, 929 s; invariant (Fig. 12) | **Same size** (10⁸ points, 104 M cells) on an 8 GB machine: model 174 s + abstraction 49 s = 223 s; invariant 5.6 s (50 s before v0.3); invariant = 80 % of the cells; **0 violations**; peak memory 4.3 GB | ✅ reproduced at full scale |
-| **ADHS**, Fig. 3: µ vs number of data points | µ ≈ 2500 → 1700, 150–650 s per abstraction | With the settings of the original experiment scripts (note 2): their saved output is 4010 → 3280, ddma gives 3888 → 3158; 0.03–0.17 s | ✅ matches the original scripts |
+| **TAC V-C**, Lorenz: abstraction + invariant | 10⁸ points, 101⁴ cells, 929 s; invariant (Fig. 12) | **Same size** (10⁸ points, 104 M cells) on an 8 GB machine: model 149 s + abstraction 4.6 s = 154 s; invariant 7.7 s (50 s before v0.3); invariant = 80 % of the cells; **0 violations**; peak memory 4.3 GB | ✅ reproduced at full scale |
+| **ADHS**, Fig. 3: µ vs number of data points | µ ≈ 2500 → 1700, 150–650 s per abstraction | With the settings of the original experiment scripts (note 2): their saved output is 4010 → 3280, ddma gives 3888 → 3158; 0.02–0.15 s | ✅ matches the original scripts |
 | **ADHS**, Fig. 5: µ vs partition size (10⁴ points) | decreasing, 3.5·10⁴ → 0.5·10⁴ | decreasing, 4.6·10⁴ → 806 | ✅ trend reproduced (values depend on the settings, note 2) |
 | **ADHS**, Fig. 6: controllable set, assume-guarantee contract | visual | 72.5 % of the safe cells; **0 violations** | ✅ |
 | **Thesis 3.4**, Fig. 3.6: µ vs number of data, five approaches (51 × 51 cells) | µ decreases for all approaches; 3 and 5 (LP final step) end lower than 1, 2, 4; 5 is the tightest | same ordering at every data size (5 < 3 < 4 ≈ 2 < 1); µ at 10⁷ points: 2.51, 2.31, 2.01, 2.31, 1.97 (approaches 1–5) | ✅ trend and ranking reproduced (values: note 6) |
-| **Thesis 3.4**, Figs. 3.7–3.8: time vs number of data | 1, 2, 4 linear in the data; 3, 5 dominated by the LP below 10⁶ points, then growing | same shapes: 1, 2, 4 linear (about 1.5–3 s at 10⁷; growth fastest since its fit is in the C++ core); 3, 5 flat at 0.1–0.2 s up to 10⁶, about 2 and 1.5 s at 10⁷ | ✅ |
+| **Thesis 3.4**, Figs. 3.7–3.8: time vs number of data | 1, 2, 4 linear in the data; 3, 5 dominated by the LP below 10⁶ points, then growing | same shapes: 1, 2, 4 linear (about 0.9–2.2 s at 10⁷; growth fastest); 3, 5 flat at 0.15–0.4 s up to 10⁶, about 1.7 and 1.2 s at 10⁷ | ✅ |
 | **Thesis 3.4**, Fig. 3.9: µ vs number of cells (10⁴ points) | µ decreases with the number of cells; the approaches come together | µ from 12.6–20.1 (36 cells) to 2.3–3.1 (2,500 cells); the gaps between approaches shrink | ✅ trend reproduced |
 | **Thesis 3.4**, Fig. 3.5: bounds contain F | visual | all five approaches contain F at 200,000 random queries (10⁷ points) | ✅ |
-| **L4DC**, exact abstraction from 300 transitions | abstraction 923 s + invariant 341 s (Fig. 5) | 90,601 states × 301 inputs: abstraction 5.3 s + invariant 0.38 s; invariant = 63.5 % of the safe set; **0 violations** | ✅ reproduced, ~100× faster |
+| **L4DC**, exact abstraction from 300 transitions | abstraction 923 s + invariant 341 s (Fig. 5) | 90,601 states × 301 inputs: abstraction 0.47 s + invariant 0.55 s; invariant = 63.5 % of the safe set; **0 violations** | ✅ reproduced |
 
 ## Notes
 

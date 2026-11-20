@@ -2,9 +2,9 @@
   "n_data": 300,
   "n_states": 90601,
   "n_inputs": 301,
-  "time_map": 0.95762541900001,
-  "time_abstraction": 5.336215252000102,
-  "time_invariant": 0.38006888999996136,
+  "time_map": 0.3868397909999999,
+  "time_abstraction": 0.4701764939999862,
+  "time_invariant": 0.5482817479999937,
   "invariant_area_fraction": 0.6352237402867145,
   "closed_loop_violations": 0
 }

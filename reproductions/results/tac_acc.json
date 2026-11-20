@@ -1,9 +1,9 @@
 {
-  "time_fit_4d": 0.7480820480000148,
-  "time_fit_2d": 0.09913960199992289,
+  "time_fit_4d": 0.4687910160000115,
+  "time_fit_2d": 0.10125741499999208,
   "n_cells_4d": 6765201,
-  "time_abstraction": 2.073582975000022,
-  "time_synthesis": 0.1757912089999536,
+  "time_abstraction": 0.20338066900001195,
+  "time_synthesis": 0.2362370889999852,
   "n_states": 132651,
   "n_inputs": 51,
   "controllable_fraction_of_safe_cells": 0.27892289777218676,

@@ -6,7 +6,7 @@ lo = lo(:); hi = hi(:); inner_lo = inner_lo(:); inner_hi = inner_hi(:);
 if isscalar(ninner), ninner = ninner * ones(numel(lo), 1); end
 edges = cell(numel(lo), 1);
 for j = 1:numel(lo)
-    e = linspace(inner_lo(j), inner_hi(j), ninner(j) + 1)';
+    e = ddma.internal.linspace_np(inner_lo(j), inner_hi(j), ninner(j) + 1);
     if lo(j) < inner_lo(j), e = [lo(j); e]; end
     if hi(j) > inner_hi(j), e = [e; hi(j)]; end
     edges{j} = e;

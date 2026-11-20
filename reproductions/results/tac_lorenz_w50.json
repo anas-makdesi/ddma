@@ -50,7 +50,7 @@
       0.04715237288873109,
       0.03537547397999128
     ],
-    "time": 1.4055868430000373,
+    "time": 1.450515786999972,
     "paper": {
       "J_hi": [
         [
@@ -153,11 +153,11 @@
     "n_samples": 10000000,
     "K": 50,
     "n_cells": 6765201,
-    "time_model": 13.427879246999964,
-    "time_abstraction": 4.052695813000014,
-    "time_total": 17.48057505999998,
-    "time_invariant": 3.288920437999991,
-    "invariant_fraction": 0.6516724336793541,
+    "time_model": 10.41838844599988,
+    "time_abstraction": 0.2717841180000278,
+    "time_total": 10.690172563999909,
+    "time_invariant": 0.44285094800000024,
+    "invariant_fraction": 0.6523433671815516,
     "closed_loop_violations": 0
   }
 }

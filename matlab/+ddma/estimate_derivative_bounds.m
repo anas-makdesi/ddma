@@ -16,8 +16,8 @@ if nargin < 3 || isempty(n_lp_pairs), n_lp_pairs = 50000; end
 if nargin < 4 || isempty(n_w_pairs), n_w_pairs = 1000000; end
 if nargin < 5 || isempty(w_weight), w_weight = 1; end
 if nargin < 6 || isempty(pairs)
-    pairs = struct('a1', randi(K, n_lp_pairs, 1), 'b1', randi(K, n_lp_pairs, 1), ...
-                   'a2', randi(K, n_w_pairs, 1), 'b2', randi(K, n_w_pairs, 1));
+    ri = @(n) ddma.internal.rand_int(1, K, n, 1);
+    pairs = struct('a1', ri(n_lp_pairs), 'b1', ri(n_lp_pairs), 'a2', ri(n_w_pairs), 'b2', ri(n_w_pairs));
 end
 dz1 = Z(pairs.a1, :) - Z(pairs.b1, :); P1 = max(dz1, 0); N1 = min(dz1, 0);
 dz2 = Z(pairs.a2, :) - Z(pairs.b2, :); P2 = max(dz2, 0); N2 = min(dz2, 0);

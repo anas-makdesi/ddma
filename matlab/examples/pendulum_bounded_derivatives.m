@@ -45,7 +45,7 @@ for k = 1:numel(methods)
     % random allowed inputs, on the true pendulum
     viol = 0; dom = find(domain);
     for r = 1:50
-        [lo, hi] = ddma.cell_bounds(Xedges, ddma.all_subs_of(A.shapeX, dom(randi(numel(dom)))));
+        [lo, hi] = ddma.cell_bounds(Xedges, ddma.all_subs_of(A.shapeX, dom(ddma.internal.rand_int(1, numel(dom)))));
         x = lo + rand(1, 2) .* (hi - lo);
         for s = 1:200
             u = ddma.controller_input(A, allowed, x, 'random');

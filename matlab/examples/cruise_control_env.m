@@ -16,7 +16,7 @@ end
 
 function [obs, L] = env_reset(P)
 L = struct('State', P.init_lo + rand(1, 2) .* (P.init_hi - P.init_lo), 'k', 0, 'dh', 0, ...
-           'phase', randi([20 59]), 'fast', rand < 0.5, 'Violation', false);
+           'phase', ddma.internal.rand_int(20, 59), 'fast', rand < 0.5, 'Violation', false);
 obs = [L.State(:); 0];
 end
 
