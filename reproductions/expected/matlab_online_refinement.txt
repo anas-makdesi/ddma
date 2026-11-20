@@ -1,0 +1,12 @@
+initial model (2000 samples): safe region 49.0 % of the specification
+step  100: safe region 51.2 % of the specification
+step  200: safe region 70.9 % of the specification
+step  300: safe region 74.2 % of the specification
+step  400: safe region 79.2 % of the specification
+step  500: safe region 80.2 % of the specification
+step  600: safe region 80.3 % of the specification
+step  700: safe region 80.3 % of the specification
+step  800: safe region 80.7 % of the specification
+step  900: safe region 80.7 % of the specification
+step 1000: safe region 80.9 % of the specification
+1000 steps, 0 violations; refinement time <t> in total

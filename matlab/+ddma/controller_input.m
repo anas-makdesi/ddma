@@ -23,7 +23,7 @@ end
 if isempty(ps), return; end
 [lo, hi] = ddma.cell_bounds(A.Uedges, ddma.all_subs_of(A.shapeU, ps));
 if ischar(pick) && strcmp(pick, 'random')
-    k = randi(numel(ps)); u = lo(k, :) + rand(1, size(lo, 2)) .* (hi(k, :) - lo(k, :));
+    k = ddma.internal.rand_int(1, numel(ps)); u = lo(k, :) + rand(1, size(lo, 2)) .* (hi(k, :) - lo(k, :));
 elseif ischar(pick)
     u = 0.5 * (lo(1, :) + hi(1, :));
 else
