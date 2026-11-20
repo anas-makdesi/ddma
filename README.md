@@ -8,6 +8,10 @@
 [![License: MIT](https://img.shields.io/pypi/l/ddma)](https://github.com/anas-makdesi/ddma/blob/main/LICENSE)
 [![Docs](https://github.com/anas-makdesi/ddma/actions/workflows/docs-pages.yml/badge.svg?branch=main)](https://anas-makdesi.github.io/ddma/)
 
+![The guaranteed band of an unknown monotone function tightening as samples arrive](https://raw.githubusercontent.com/anas-makdesi/ddma/main/docs/figures/demo.gif)
+
+*An unknown increasing function, measured with bounded noise: the band ddma computes tightens as data arrives and always contains the true outputs ([script](https://github.com/anas-makdesi/ddma/blob/main/examples/demo_gif.py)).*
+
 ## Install
 
 ```bash
