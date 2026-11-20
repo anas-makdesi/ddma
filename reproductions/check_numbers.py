@@ -54,12 +54,9 @@ CHECKS = {
     "tac_lorenz_w50": (["reproductions/tac_lorenz.py"], "full"),
     "tac_lorenz_w1": (["reproductions/tac_lorenz.py", "--w-weight", "1"], "full"),
 }
-# online_refinement.m is left out: its very first safe set already differs between Octave 8.4
-# (Ubuntu 24.04) and Octave 11 (Ubuntu 26.04, CI), 49.0 % vs 48.8 %, before any random
-# integer is drawn; a platform difference in the growth fit, not a change in ddma.
 MATLAB = ["scalar_map", "bounded_derivative_map", "acc_safety_filter", "lazy_synthesis",
-          "pendulum_bounded_derivatives", "rl_safety_filter", "assumption_monitor",
-          "envelope_room_cooling", "envelope_nonlinear"]
+          "pendulum_bounded_derivatives", "online_refinement", "rl_safety_filter",
+          "assumption_monitor", "envelope_room_cooling", "envelope_nonlinear"]
 for _m in MATLAB:
     CHECKS[f"matlab_{_m}"] = (_m, "matlab")
 
