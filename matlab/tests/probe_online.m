@@ -23,6 +23,11 @@ for be = {'mex', 'matlab'}
     if isnumeric(v) && numel(v) > 1, v = v(isfinite(v)); printf('  S.%s n=%d sum=%.17g\n', fn{i}, numel(v), sum(v(:))); end
   end
   A = ddma.abstraction(Xedges, Uedges, S, ddma.affine_bounds(A_G), [], [], false, be{1});
+  printf('  safe %d edges %.17g %.17g\n', nnz(safe), sum(Xedges{1}), sum(Xedges{2}));
+  printf('  enabled %d first %.17g last %.17g\n', nnz(A.enabled), sum(double(A.first(:))), sum(double(A.last(:))));
+  [glo, ghi] = feval(ddma.affine_bounds(A_G), [-0.5 0.3], [-0.4 0.35], -1, 1);
+  printf('  g %.17g %.17g %.17g %.17g\n', glo, ghi);
+  fa = fieldnames(A); for i = 1:numel(fa), v = A.(fa{i}); if isnumeric(v) || islogical(v), printf('  A.%s %s %.17g\n', fa{i}, class(v), sum(double(v(isfinite(double(v)))))); end, end
   [domain, ~] = ddma.safety(A, safe, be{1});
   printf('%s: %.2f %%\n', be{1}, 100 * nnz(domain) / nnz(safe));
 end
